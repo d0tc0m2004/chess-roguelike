@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Roguelike</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <header class="game-header">
+            <h1>CHESS ROGUELIKE</h1>
+            <div class="battle-info">
+                <span id="battle-number">Battle 1</span>
+                <span id="turn-indicator">Your Turn</span>
+                <button id="help-btn" class="help-btn">?</button>
+            </div>
+        </header>
+
+        <main class="game-main">
+            <!-- Enemy Info -->
+            <div class="enemy-info">
+                <h3>ENEMY ARMY</h3>
+                <span id="enemy-piece-count">8 pieces</span>
+            </div>
+
+            <!-- Chess Board -->
+            <div class="board-wrapper">
+                <div class="board" id="board"></div>
+            </div>
+
+            <!-- Enemy Intent Display -->
+            <div class="enemy-intent" id="enemy-intent">
+                <span>Enemy intends: </span>
+                <span id="intent-text">-</span>
+            </div>
+
+            <!-- Player Info -->
+            <div class="player-info">
+                <h3>YOUR ARMY</h3>
+                <span id="player-piece-count">5 pieces</span>
+            </div>
+
+            <!-- Card Hand -->
+            <div class="card-hand" id="card-hand">
+                <!-- Cards will be inserted here by JS -->
+            </div>
+
+            <div class="card-instructions" id="card-instructions"></div>
+        </main>
+
+        <!-- Game Over Overlay -->
+        <div class="overlay" id="game-over-overlay">
+            <div class="overlay-content">
+                <h2 id="game-over-text">Victory!</h2>
+                <p id="game-over-subtext">You defeated the enemy army!</p>
+                <button id="restart-btn">Play Again</button>
+            </div>
+        </div>
+
+        <!-- How To Play Overlay -->
+        <div class="overlay" id="help-overlay">
+            <div class="overlay-content help-content">
+                <button class="close-btn" id="close-help">&times;</button>
+                <h2>How To Play</h2>
+                
+                <div class="help-section">
+                    <h3>Goal</h3>
+                    <p>Capture the enemy <span class="enemy-color">King</span> to win. Don't let them capture yours!</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>The Odds Are Against You</h3>
+                    <p>You have a small army. The enemy has a full army. That's why you have <span class="highlight">CHEAT CARDS</span>.</p>
+                </div>
+
+                <div class="help-section">
+                    <h3>How To Move</h3>
+                    <ul>
+                        <li>Click one of your pieces (blue glow) to select it</li>
+                        <li>Green dots show where you can move</li>
+                        <li>Red squares show enemies you can capture</li>
+                        <li>Click a valid square to move there</li>
+                    </ul>
+                </div>
+
+                <div class="help-section">
+                    <h3>Chess Pieces</h3>
+                    <div class="piece-guide">
+                        <div class="piece-row"><span class="piece-symbol">♔</span> <strong>King</strong> - Moves 1 square any direction. Lose him = Game Over!</div>
+                        <div class="piece-row"><span class="piece-symbol">♕</span> <strong>Queen</strong> - Moves any direction, any distance. Most powerful!</div>
+                        <div class="piece-row"><span class="piece-symbol">♖</span> <strong>Rook</strong> - Moves in straight lines (up/down/left/right)</div>
+                        <div class="piece-row"><span class="piece-symbol">♗</span> <strong>Bishop</strong> - Moves diagonally</div>
+                        <div class="piece-row"><span class="piece-symbol">♘</span> <strong>Knight</strong> - Moves in an "L" shape, can jump over pieces</div>
+                        <div class="piece-row"><span class="piece-symbol">♙</span> <strong>Pawn</strong> - Moves forward 1 (or 2 from start), captures diagonally</div>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h3>Your CHEAT Cards</h3>
+                    <p>You can play up to <strong>3 cards per battle</strong>. <span class="highlight">Playing a card ends your turn</span> - you can't move AND play a card in the same turn!</p>
+                    <div class="card-guide">
+                        <div class="card-row"><span class="card-name-guide">Stall</span> - Enemy skips their turn</div>
+                        <div class="card-row"><span class="card-name-guide">Teleport</span> - Move any of your pieces anywhere</div>
+                        <div class="card-row"><span class="card-name-guide">Freeze</span> - Enemy piece can't move for 2 turns</div>
+                        <div class="card-row"><span class="card-name-guide">Swap</span> - Exchange positions of any two pieces</div>
+                        <div class="card-row"><span class="card-name-guide">Promote</span> - Turn your Pawn into a Queen instantly</div>
+                    </div>
+                </div>
+
+                <div class="help-section">
+                    <h3>Enemy Intent</h3>
+                    <p>The red highlighted square shows where the enemy <strong>plans to move next</strong>. Use this to plan your defense or strike first!</p>
+                </div>
+
+                <div class="help-section tips">
+                    <h3>Tips</h3>
+                    <ul>
+                        <li>Watch the enemy intent - you can see their next move!</li>
+                        <li>Freeze the Queen - she's their most dangerous piece</li>
+                        <li>Swap can put your piece in attack position OR move their King into danger</li>
+                        <li>Promote a pawn early for a powerful Queen</li>
+                        <li>Don't waste cards - you only get 3 per battle!</li>
+                    </ul>
+                </div>
+
+                <button id="start-game-btn" class="start-btn">Got it, let's play!</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
