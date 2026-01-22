@@ -94,7 +94,7 @@ body {
 .board {
     display: grid;
     grid-template-columns: repeat(8, 70px);
-    grid-template-rows: repeat(6, 70px);
+    grid-template-rows: repeat(8, 70px);
     gap: 0;
     background: #2c2c3e;
     padding: 8px;

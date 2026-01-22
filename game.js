@@ -4,7 +4,7 @@
 // CONSTANTS & CONFIG
 // ============================================
 
-const BOARD_ROWS = 6;
+const BOARD_ROWS = 8;
 
 const PIECES = {
     KING: 'king',
@@ -152,7 +152,258 @@ class ChessRoguelike {
         this.piecesLost = 0;
         this.piecesCaptures = 0;
 
+        // Stockfish AI engine
+        this.stockfish = null;
+        this.stockfishReady = false;
+        this.stockfishPending = null;
+        this.initStockfish();
+
         this.initLoadout();
+    }
+
+    // ============================================
+    // STOCKFISH INTEGRATION
+    // ============================================
+
+    initStockfish() {
+        try {
+            // Try to initialize Stockfish as a Web Worker
+            if (typeof STOCKFISH === 'function') {
+                this.stockfish = STOCKFISH();
+                this.setupStockfishHandlers();
+            } else {
+                console.warn('Stockfish not available, falling back to minimax');
+            }
+        } catch (e) {
+            console.warn('Failed to initialize Stockfish:', e);
+            this.stockfish = null;
+        }
+    }
+
+    setupStockfishHandlers() {
+        if (!this.stockfish) return;
+
+        this.stockfish.onmessage = (event) => {
+            const message = typeof event === 'string' ? event : event.data;
+
+            if (message === 'uciok') {
+                this.stockfishReady = true;
+                // Set Stockfish options for faster play
+                this.stockfish.postMessage('setoption name Skill Level value 20');
+                this.stockfish.postMessage('isready');
+            } else if (message === 'readyok') {
+                this.stockfishReady = true;
+            } else if (message.startsWith('bestmove')) {
+                this.handleStockfishBestMove(message);
+            } else if (message.startsWith('info') && message.includes('pv')) {
+                this.handleStockfishInfo(message);
+            }
+        };
+
+        // Initialize UCI protocol
+        this.stockfish.postMessage('uci');
+    }
+
+    // Convert board state to FEN string
+    boardToFEN() {
+        const pieceToFEN = {
+            king: { player: 'K', enemy: 'k' },
+            queen: { player: 'Q', enemy: 'q' },
+            rook: { player: 'R', enemy: 'r' },
+            bishop: { player: 'B', enemy: 'b' },
+            knight: { player: 'N', enemy: 'n' },
+            pawn: { player: 'P', enemy: 'p' }
+        };
+
+        let fen = '';
+
+        // Board position
+        for (let row = 0; row < 8; row++) {
+            let emptyCount = 0;
+            for (let col = 0; col < 8; col++) {
+                const piece = this.board[row][col];
+                if (piece) {
+                    if (emptyCount > 0) {
+                        fen += emptyCount;
+                        emptyCount = 0;
+                    }
+                    fen += pieceToFEN[piece.type][piece.owner];
+                } else {
+                    emptyCount++;
+                }
+            }
+            if (emptyCount > 0) {
+                fen += emptyCount;
+            }
+            if (row < 7) {
+                fen += '/';
+            }
+        }
+
+        // Active color: 'b' for black (enemy's turn when we query Stockfish)
+        // We query Stockfish for the enemy's move, so it's always black's turn
+        fen += ' b';
+
+        // Castling availability (simplified - no castling in our game)
+        fen += ' -';
+
+        // En passant target square (simplified - none)
+        fen += ' -';
+
+        // Halfmove clock and fullmove number
+        fen += ' 0 1';
+
+        return fen;
+    }
+
+    // Parse algebraic move notation (e.g., "e2e4") to row/col
+    parseStockfishMove(moveStr) {
+        if (!moveStr || moveStr.length < 4) return null;
+
+        const files = 'abcdefgh';
+        const fromCol = files.indexOf(moveStr[0]);
+        const fromRow = 8 - parseInt(moveStr[1]);
+        const toCol = files.indexOf(moveStr[2]);
+        const toRow = 8 - parseInt(moveStr[3]);
+
+        if (fromCol < 0 || toCol < 0 || fromRow < 0 || fromRow > 7 || toRow < 0 || toRow > 7) {
+            return null;
+        }
+
+        return {
+            from: { row: fromRow, col: fromCol },
+            to: { row: toRow, col: toCol }
+        };
+    }
+
+    // Handle bestmove response from Stockfish
+    handleStockfishBestMove(message) {
+        const parts = message.split(' ');
+        const bestMoveIdx = parts.indexOf('bestmove');
+        if (bestMoveIdx >= 0 && parts[bestMoveIdx + 1]) {
+            const moveStr = parts[bestMoveIdx + 1];
+            const parsedMove = this.parseStockfishMove(moveStr);
+
+            if (this.stockfishPending) {
+                this.stockfishPending.bestMove = parsedMove;
+                this.stockfishPending.resolve(this.stockfishPending.candidates);
+            }
+        }
+    }
+
+    // Handle info lines with principal variations
+    handleStockfishInfo(message) {
+        if (!this.stockfishPending) return;
+
+        // Extract multipv number and pv moves
+        const multipvMatch = message.match(/multipv (\d+)/);
+        const pvMatch = message.match(/pv ([a-h][1-8][a-h][1-8])/);
+
+        if (multipvMatch && pvMatch) {
+            const pvNum = parseInt(multipvMatch[1]);
+            const moveStr = pvMatch[1];
+            const parsedMove = this.parseStockfishMove(moveStr);
+
+            if (parsedMove && pvNum <= 5) {
+                this.stockfishPending.candidates[pvNum - 1] = parsedMove;
+            }
+        }
+    }
+
+    // Get top candidate moves from Stockfish
+    async getStockfishCandidates(depth = 10, multiPV = 5) {
+        if (!this.stockfish || !this.stockfishReady) {
+            return null;
+        }
+
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                this.stockfishPending = null;
+                resolve(null); // Timeout - fall back to minimax
+            }, 3000);
+
+            this.stockfishPending = {
+                candidates: [],
+                bestMove: null,
+                resolve: (candidates) => {
+                    clearTimeout(timeout);
+                    this.stockfishPending = null;
+                    resolve(candidates);
+                }
+            };
+
+            const fen = this.boardToFEN();
+            this.stockfish.postMessage(`position fen ${fen}`);
+            this.stockfish.postMessage(`go depth ${depth} multipv ${multiPV}`);
+        });
+    }
+
+    // Filter Stockfish moves through safety layer
+    filterStockfishMoves(candidates) {
+        if (!candidates || candidates.length === 0) return null;
+
+        for (const move of candidates) {
+            if (!move) continue;
+
+            const piece = this.board[move.from.row]?.[move.from.col];
+            if (!piece || piece.owner !== 'enemy') continue;
+
+            // Check 1: Reject moves to trapped squares
+            const trapKey = `${move.to.row},${move.to.col}`;
+            if (this.traps.has(trapKey)) {
+                continue; // REJECT - trap
+            }
+
+            // Check 2: Reject moves from frozen pieces
+            if (this.frozenPieces.has(piece.id)) {
+                continue; // REJECT - frozen
+            }
+
+            // Check 3: Reject moves from traitor pieces
+            if (this.traitorPieces.has(piece.id)) {
+                continue; // REJECT - traitor
+            }
+
+            // Check 4: Reject captures of invulnerable pieces
+            const targetPiece = this.board[move.to.row]?.[move.to.col];
+            if (targetPiece && this.invulnerablePieces.has(targetPiece.id)) {
+                continue; // REJECT - divine shield
+            }
+
+            // Check 5: Verify move is actually valid
+            const validMoves = this.getValidMoves(piece, true);
+            const isValid = validMoves.some(m => m.row === move.to.row && m.col === move.to.col);
+            if (!isValid) {
+                continue; // REJECT - not a valid move
+            }
+
+            // This move passes all checks!
+            return {
+                piece,
+                from: move.from,
+                to: { row: move.to.row, col: move.to.col }
+            };
+        }
+
+        return null; // All moves rejected
+    }
+
+    // Get best move using Stockfish with safety filter, falling back to minimax
+    async getBestHybridMove() {
+        // Try Stockfish first
+        const candidates = await this.getStockfishCandidates(10, 5);
+
+        if (candidates && candidates.length > 0) {
+            const safeMove = this.filterStockfishMoves(candidates);
+            if (safeMove) {
+                console.log('Using Stockfish move');
+                return safeMove;
+            }
+        }
+
+        // Fallback to minimax
+        console.log('Falling back to minimax');
+        return this.findBestEnemyMove();
     }
 
     initLoadout() {
@@ -240,14 +491,14 @@ class ChessRoguelike {
         this.piecesCaptures = 0;
 
         // === PLAYER ARMY (4 pieces) ===
-        // King at e1 (row 5, col 4) - bottom row center
-        this.placePiece(5, 4, PIECES.KING, 'player');
+        // King at e1 (row 7, col 4) - bottom row center (standard 8x8 board)
+        this.placePiece(7, 4, PIECES.KING, 'player');
 
         // 3 chosen pieces in guard formation around the king
-        // Position: d1 (5,3), f1 (5,5), e2 (4,4)
-        this.placePiece(5, 3, this.playerLoadout[0], 'player'); // Left of king
-        this.placePiece(5, 5, this.playerLoadout[1], 'player'); // Right of king
-        this.placePiece(4, 4, this.playerLoadout[2], 'player'); // In front of king
+        // Position: d1 (7,3), f1 (7,5), e2 (6,4)
+        this.placePiece(7, 3, this.playerLoadout[0], 'player'); // Left of king
+        this.placePiece(7, 5, this.playerLoadout[1], 'player'); // Right of king
+        this.placePiece(6, 4, this.playerLoadout[2], 'player'); // In front of king
 
         // === ENEMY ARMY (16 pieces - Full Chess Army) ===
         // Back row: R N B Q K B N R
@@ -502,7 +753,7 @@ class ChessRoguelike {
 
     toChessNotation(row, col) {
         const files = 'abcdefgh';
-        const ranks = '654321';
+        const ranks = '87654321';
         return files[col] + ranks[row];
     }
 
@@ -944,7 +1195,7 @@ class ChessRoguelike {
 
     addPawnMoves(piece, moves, forAI = false) {
         const direction = piece.owner === 'player' ? -1 : 1;
-        const startRow = piece.owner === 'player' ? 4 : 1;
+        const startRow = piece.owner === 'player' ? 6 : 1;
 
         // Forward move
         const newRow = piece.row + direction;
@@ -1169,7 +1420,7 @@ class ChessRoguelike {
         }, 800);
     }
 
-    doEnemyTurn() {
+    async doEnemyTurn() {
         if (this.skipEnemyTurn) {
             this.skipEnemyTurn = false;
             this.showCardInstructions('Enemy turn skipped!');
@@ -1184,14 +1435,15 @@ class ChessRoguelike {
         // The AI "rethinks" based on the player's actual move, not the projected one
         this.enemyIntent = null;
 
-        // Show "thinking" indicator briefly
+        // Show "thinking" indicator - Stockfish is analyzing
         const intentText = document.getElementById('intent-text');
         if (intentText) {
-            intentText.textContent = 'Rethinking...';
+            intentText.textContent = 'Analyzing...';
         }
 
-        // Calculate the actual best move based on current board state
-        const bestMove = this.findBestEnemyMove();
+        // Use Stockfish hybrid move system with safety filter
+        // Falls back to minimax if Stockfish fails
+        const bestMove = await this.getBestHybridMove();
 
         if (bestMove) {
             this.enemyIntent = bestMove; // Update intent for display
