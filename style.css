@@ -522,26 +522,27 @@ body::before {
    ============================================ */
 
 /* ============================================
-   CARD HAND - GRID LAYOUT FOR SIDEBAR
+   CARD HAND - FANNED LAYOUT FOR SIDEBAR
    ============================================ */
 .card-hand {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-end;
     width: 100%;
-    padding: 10px;
+    padding: 20px 5px 10px 5px;
     margin-top: auto;
-    max-height: 320px;
-    overflow-y: auto;
+    min-height: 180px;
+    position: relative;
 }
 
 .card {
-    width: 100%;
-    height: 140px;
+    width: 90px;
+    height: 130px;
+    margin: 0 -12px;
     background: linear-gradient(145deg, #1a1525, #0d0a12);
     border: 2px solid #3a3050;
     border-radius: 6px;
-    padding: 8px;
+    padding: 6px;
     cursor: pointer;
     transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: flex;
@@ -550,55 +551,65 @@ body::before {
     justify-content: flex-start;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
     position: relative;
+    flex-shrink: 0;
+    transform-origin: bottom center;
 }
 
+/* Fan Rotation */
+.card:nth-child(1) { transform: rotate(-12deg) translateY(8px); z-index: 1; }
+.card:nth-child(2) { transform: rotate(-6deg) translateY(2px); z-index: 2; }
+.card:nth-child(3) { transform: rotate(0deg) translateY(0); z-index: 3; }
+.card:nth-child(4) { transform: rotate(6deg) translateY(2px); z-index: 4; }
+.card:nth-child(5) { transform: rotate(12deg) translateY(8px); z-index: 5; }
+
 .card:hover {
-    transform: scale(1.05);
-    z-index: 100;
+    transform: rotate(0deg) translateY(-30px) scale(1.15) !important;
+    z-index: 100 !important;
     background: linear-gradient(145deg, #251e35, #15101a);
     border-color: var(--gold);
     box-shadow: 0 0 15px var(--gold-glow);
 }
 
 .card.selected {
-    transform: scale(1.08);
-    z-index: 101;
+    transform: rotate(0deg) translateY(-35px) scale(1.2) !important;
+    z-index: 101 !important;
     border-color: var(--gold);
     box-shadow: 0 0 20px var(--gold-glow);
 }
 
 .card-name {
     font-family: var(--font-title);
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     font-weight: 600;
     text-align: center;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     white-space: normal;
     color: var(--gold);
-    letter-spacing: 0.02rem;
+    letter-spacing: 0.01rem;
+    line-height: 1.2;
 }
 
 .card-rarity {
     position: absolute;
-    bottom: 4px;
+    bottom: 3px;
     left: 50%;
     transform: translateX(-50%);
-    font-size: 0.5rem;
+    font-size: 0.45rem;
     background: none;
     padding: 0;
     text-transform: uppercase;
-    letter-spacing: 0.05rem;
+    letter-spacing: 0.03rem;
     opacity: 0.6;
 }
 
-/* Card Descriptions Visible */
+/* Card Descriptions - Hidden in fan mode, visible on hover */
 .card-effect {
     display: block;
-    font-size: 0.6rem;
+    font-size: 0.5rem;
     color: #a0a0b0;
     text-align: center;
-    line-height: 1.3;
-    margin-top: 4px;
+    line-height: 1.2;
+    margin-top: 3px;
     flex-grow: 1;
     overflow: hidden;
 }
@@ -1385,12 +1396,13 @@ body::before {
     }
 
     .card-hand {
-        grid-template-columns: repeat(3, 1fr);
-        max-height: none;
+        min-height: 150px;
     }
 
     .card {
-        height: 120px;
+        width: 80px;
+        height: 115px;
+        margin: 0 -10px;
     }
 }
 
@@ -1411,12 +1423,18 @@ body::before {
         font-size: 28px;
     }
 
-    .card-hand {
-        grid-template-columns: repeat(2, 1fr);
+    .card {
+        width: 70px;
+        height: 100px;
+        margin: 0 -8px;
     }
 
-    .card {
-        height: 110px;
+    .card-name {
+        font-size: 0.5rem;
+    }
+
+    .card-effect {
+        font-size: 0.4rem;
     }
 
     .game-header h1 {
