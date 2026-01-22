@@ -570,8 +570,9 @@ class ChessRoguelike {
     }
 
     handleCellClick(row, col) {
-        // If we're in a card action state, handle that
-        if (this.cardState) {
+        // If we're in a card action state that needs target selection, handle that
+        // (instant cards allow normal piece movement)
+        if (this.cardState && this.cardState.type !== 'instant') {
             this.handleCardAction(row, col);
             return;
         }
@@ -583,6 +584,13 @@ class ChessRoguelike {
         // Clicking on a valid move -> execute move
         const validMove = this.validMoves.find(m => m.row === row && m.col === col);
         if (this.selectedPiece && validMove) {
+            // If an instant card was active, consume it now
+            if (this.cardState && this.cardState.type === 'instant') {
+                this.cardsPlayedThisBattle++;
+                this.selectedCard = null;
+                this.cardState = null;
+                this.clearCardInstructions();
+            }
             this.movePiece(this.selectedPiece, row, col, validMove.piercing || false);
             this.selectedPiece = null;
             this.validMoves = [];
@@ -611,6 +619,9 @@ class ChessRoguelike {
         
         // If clicking same card, deselect
         if (this.selectedCard === cardId) {
+            // Deactivate instant card effects if they were previewing
+            this.knightJumpActive = false;
+            this.snipeActive = false;
             this.selectedCard = null;
             this.cardState = null;
             this.clearCardInstructions();
@@ -618,15 +629,21 @@ class ChessRoguelike {
             return;
         }
 
+        // Deactivate any previously active instant card effects
+        this.knightJumpActive = false;
+        this.snipeActive = false;
+
         this.selectedCard = cardId;
-        
+
         // Clear any piece selection when using a card
         this.selectedPiece = null;
         this.validMoves = [];
 
         switch (card.action) {
             case 'instant':
-                this.executeCard(cardId);
+                // Don't execute immediately - let player preview and cancel if needed
+                this.cardState = { type: 'instant', card: cardId };
+                this.activateInstantCard(cardId);
                 break;
             case 'selectEnemy':
                 this.cardState = { type: 'selectEnemy', card: cardId };
@@ -687,13 +704,16 @@ class ChessRoguelike {
     // CARD EXECUTION
     // ============================================
 
-    executeCard(cardId) {
+    // Activate instant card effect for preview (doesn't consume the card yet)
+    activateInstantCard(cardId) {
         switch (cardId) {
             case 'knightJump':
-                this.executeKnightJump();
+                this.knightJumpActive = true;
+                this.showCardInstructions("Knight's Jump active! Make a move or click card again to cancel.");
                 break;
             case 'snipe':
-                this.executeSnipe();
+                this.snipeActive = true;
+                this.showCardInstructions("Snipe active! Make a move or click card again to cancel.");
                 break;
         }
     }
@@ -794,32 +814,6 @@ class ChessRoguelike {
         this.calculateEnemyIntent();
 
         this.finishCardPlay();
-    }
-
-    // Knight's Jump: All player pieces can move like Knights this turn
-    executeKnightJump() {
-        this.knightJumpActive = true;
-        this.showCardInstructions("All your pieces can now move like Knights!");
-        setTimeout(() => this.clearCardInstructions(), 1500);
-
-        // Don't end turn - player gets to make a move with knight powers
-        this.cardsPlayedThisBattle++;
-        this.selectedCard = null;
-        this.cardState = null;
-        this.render();
-    }
-
-    // Snipe: Ranged pieces can capture through one obstacle
-    executeSnipe() {
-        this.snipeActive = true;
-        this.showCardInstructions("Your ranged pieces can capture through obstacles!");
-        setTimeout(() => this.clearCardInstructions(), 1500);
-
-        // Don't end turn - player gets to make a snipe capture
-        this.cardsPlayedThisBattle++;
-        this.selectedCard = null;
-        this.cardState = null;
-        this.render();
     }
 
     finishCardPlay() {
