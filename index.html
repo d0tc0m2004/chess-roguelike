@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +9,7 @@
     <!-- Stockfish.js for Grandmaster-level AI -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js"></script>
 </head>
+
 <body>
     <!-- Loadout Screen -->
     <div class="loadout-screen" id="loadout-screen">
@@ -77,37 +79,40 @@
     </div>
 
     <div class="game-container" id="game-container" style="display: none;">
-        <header class="game-header">
-            <h1>THE SPARTAN 300</h1>
-            <div class="battle-info">
-                <span id="battle-number">4 vs 16</span>
-                <span id="turn-indicator">Your Turn</span>
-                <button id="help-btn" class="help-btn">?</button>
-            </div>
-        </header>
-
-        <main class="game-main">
-            <!-- Enemy Info -->
-            <div class="enemy-info">
-                <h3>ENEMY ARMY</h3>
-                <span id="enemy-piece-count">8 pieces</span>
-            </div>
-
-            <!-- Chess Board -->
+        <!-- LEFT: Chess Board -->
+        <div class="board-column">
             <div class="board-wrapper">
                 <div class="board" id="board"></div>
             </div>
+        </div>
+
+        <!-- RIGHT: Sidebar Dashboard -->
+        <div class="game-sidebar">
+            <header class="game-header">
+                <h1>SPARTAN 300</h1>
+                <div class="battle-info">
+                    <span id="battle-number">4 vs 16</span>
+                    <span id="turn-indicator">Your Turn</span>
+                    <button id="help-btn" class="help-btn">?</button>
+                </div>
+            </header>
+
+            <!-- Enemy Info -->
+            <div class="enemy-info">
+                <h3>ENEMY ARMY</h3>
+                <span id="enemy-piece-count">16 pieces</span>
+            </div>
 
             <!-- Enemy Intent Display -->
-            <div class="enemy-intent" id="enemy-intent" title="The AI may change its move based on your actions">
-                <span>Projected Move: </span>
+            <div class="enemy-intent" id="enemy-intent">
+                <span>Projected: </span>
                 <span id="intent-text">-</span>
             </div>
 
             <!-- Player Info -->
             <div class="player-info">
                 <h3>YOUR ARMY</h3>
-                <span id="player-piece-count">5 pieces</span>
+                <span id="player-piece-count">4 pieces</span>
             </div>
 
             <!-- Card Hand -->
@@ -116,7 +121,7 @@
             </div>
 
             <div class="card-instructions" id="card-instructions"></div>
-        </main>
+        </div>
 
         <!-- Game Over Overlay -->
         <div class="overlay" id="game-over-overlay">
@@ -135,7 +140,7 @@
             <div class="overlay-content help-content">
                 <button class="close-btn" id="close-help">&times;</button>
                 <h2>How To Play</h2>
-                
+
                 <div class="help-section">
                     <h3>Goal</h3>
                     <p>Capture the enemy <span class="enemy-color">King</span> to win. Don't let them capture yours!</p>
@@ -143,7 +148,8 @@
 
                 <div class="help-section">
                     <h3>The Odds Are Against You</h3>
-                    <p>You have a small army. The enemy has a full army. That's why you have <span class="highlight">CHEAT CARDS</span>.</p>
+                    <p>You have a small army. The enemy has a full army. That's why you have <span
+                            class="highlight">CHEAT CARDS</span>.</p>
                 </div>
 
                 <div class="help-section">
@@ -159,30 +165,44 @@
                 <div class="help-section">
                     <h3>Chess Pieces</h3>
                     <div class="piece-guide">
-                        <div class="piece-row"><span class="piece-symbol">♔</span> <strong>King</strong> - Moves 1 square any direction. Lose him = Game Over!</div>
-                        <div class="piece-row"><span class="piece-symbol">♕</span> <strong>Queen</strong> - Moves any direction, any distance. Most powerful!</div>
-                        <div class="piece-row"><span class="piece-symbol">♖</span> <strong>Rook</strong> - Moves in straight lines (up/down/left/right)</div>
-                        <div class="piece-row"><span class="piece-symbol">♗</span> <strong>Bishop</strong> - Moves diagonally</div>
-                        <div class="piece-row"><span class="piece-symbol">♘</span> <strong>Knight</strong> - Moves in an "L" shape, can jump over pieces</div>
-                        <div class="piece-row"><span class="piece-symbol">♙</span> <strong>Pawn</strong> - Moves forward 1 (or 2 from start), captures diagonally</div>
+                        <div class="piece-row"><span class="piece-symbol">♔</span> <strong>King</strong> - Moves 1
+                            square any direction. Lose him = Game Over!</div>
+                        <div class="piece-row"><span class="piece-symbol">♕</span> <strong>Queen</strong> - Moves any
+                            direction, any distance. Most powerful!</div>
+                        <div class="piece-row"><span class="piece-symbol">♖</span> <strong>Rook</strong> - Moves in
+                            straight lines (up/down/left/right)</div>
+                        <div class="piece-row"><span class="piece-symbol">♗</span> <strong>Bishop</strong> - Moves
+                            diagonally</div>
+                        <div class="piece-row"><span class="piece-symbol">♘</span> <strong>Knight</strong> - Moves in an
+                            "L" shape, can jump over pieces</div>
+                        <div class="piece-row"><span class="piece-symbol">♙</span> <strong>Pawn</strong> - Moves forward
+                            1 (or 2 from start), captures diagonally</div>
                     </div>
                 </div>
 
                 <div class="help-section">
                     <h3>Your TACTICAL Cards</h3>
-                    <p>You can play up to <strong>3 cards per battle</strong>. <span class="highlight">Playing a card ends your turn</span> - you can't move AND play a card in the same turn!</p>
+                    <p>You can play up to <strong>3 cards per battle</strong>. <span class="highlight">Playing a card
+                            ends your turn</span> - you can't move AND play a card in the same turn!</p>
                     <div class="card-guide">
-                        <div class="card-row"><span class="card-name-guide">Divine Shield</span> - Your piece cannot be captured for 1 round</div>
-                        <div class="card-row"><span class="card-name-guide">Knight's Jump</span> - All your pieces can move like Knights this turn</div>
-                        <div class="card-row"><span class="card-name-guide">Snipe</span> - Your ranged pieces can capture through one obstacle</div>
-                        <div class="card-row"><span class="card-name-guide">Caltrops</span> - Place a lethal trap on an empty square (enemies die if they step on it)</div>
-                        <div class="card-row"><span class="card-name-guide">Shield Bash</span> - Push an adjacent enemy 1 tile back; kills if they hit a wall or piece</div>
+                        <div class="card-row"><span class="card-name-guide">Divine Shield</span> - Your piece cannot be
+                            captured for 1 round</div>
+                        <div class="card-row"><span class="card-name-guide">Knight's Jump</span> - All your pieces can
+                            move like Knights this turn</div>
+                        <div class="card-row"><span class="card-name-guide">Snipe</span> - Your ranged pieces can
+                            capture through one obstacle</div>
+                        <div class="card-row"><span class="card-name-guide">Caltrops</span> - Place a lethal trap on an
+                            empty square (enemies die if they step on it)</div>
+                        <div class="card-row"><span class="card-name-guide">Shield Bash</span> - Push an adjacent enemy
+                            1 tile back; kills if they hit a wall or piece</div>
                     </div>
                 </div>
 
                 <div class="help-section">
                     <h3>Projected Move</h3>
-                    <p>The red highlighted square shows where the enemy <strong>is likely to move</strong>. However, the AI will <strong>re-evaluate</strong> after you move - it may change its mind to punish mistakes!</p>
+                    <p>The red highlighted square shows where the enemy <strong>is likely to move</strong>. However, the
+                        AI will <strong>re-evaluate</strong> after you move - it may change its mind to punish mistakes!
+                    </p>
                 </div>
 
                 <div class="help-section tips">
@@ -204,4 +224,5 @@
 
     <script src="game.js"></script>
 </body>
+
 </html>
