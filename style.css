@@ -94,7 +94,7 @@ body {
 .board {
     display: grid;
     grid-template-columns: repeat(8, 70px);
-    grid-template-rows: repeat(8, 70px);
+    grid-template-rows: repeat(6, 70px);
     gap: 0;
     background: #2c2c3e;
     padding: 8px;
@@ -543,3 +543,279 @@ body {
 .start-btn:hover {
     box-shadow: 0 10px 30px rgba(74, 156, 93, 0.5);
 }
+
+/* ============================================
+   LOADOUT SCREEN STYLES
+   ============================================ */
+
+.loadout-screen {
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.loadout-container {
+    text-align: center;
+    max-width: 800px;
+}
+
+.loadout-title {
+    font-size: 3rem;
+    letter-spacing: 0.5rem;
+    color: #ffd700;
+    text-shadow: 0 0 30px rgba(255, 215, 0, 0.5);
+    margin-bottom: 10px;
+}
+
+.loadout-subtitle {
+    color: #aaa;
+    font-size: 1.1rem;
+    margin-bottom: 40px;
+}
+
+.loadout-army {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap;
+    margin-bottom: 40px;
+}
+
+.loadout-slot {
+    width: 140px;
+    height: 200px;
+    background: linear-gradient(145deg, #2a2a4a, #1a1a2e);
+    border-radius: 15px;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    border: 3px solid #444;
+    transition: all 0.3s ease;
+}
+
+.loadout-slot.fixed {
+    border-color: #ffd700;
+    box-shadow: 0 0 20px rgba(255, 215, 0, 0.2);
+}
+
+.loadout-slot.selectable:hover {
+    border-color: #3498db;
+    transform: translateY(-5px);
+}
+
+.slot-label {
+    font-size: 0.75rem;
+    letter-spacing: 0.1rem;
+    color: #888;
+    margin-bottom: 10px;
+}
+
+.loadout-slot.fixed .slot-label {
+    color: #ffd700;
+}
+
+.slot-piece {
+    font-size: 48px;
+    filter: drop-shadow(0 0 5px #3498db);
+    margin-bottom: 10px;
+}
+
+.slot-name {
+    font-weight: bold;
+    color: #fff;
+    margin-bottom: 5px;
+}
+
+.slot-desc {
+    font-size: 0.7rem;
+    color: #888;
+}
+
+.slot-select select {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid #555;
+    color: #fff;
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-size: 0.9rem;
+    cursor: pointer;
+    width: 100%;
+}
+
+.slot-select select:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+.loadout-enemy-preview {
+    background: rgba(231, 76, 60, 0.1);
+    border: 1px solid rgba(231, 76, 60, 0.3);
+    border-radius: 15px;
+    padding: 20px 40px;
+    margin-bottom: 30px;
+}
+
+.loadout-enemy-preview h3 {
+    color: #e74c3c;
+    font-size: 0.9rem;
+    letter-spacing: 0.1rem;
+    margin-bottom: 15px;
+}
+
+.enemy-preview-pieces {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.enemy-piece-preview {
+    font-size: 28px;
+    letter-spacing: 8px;
+    filter: drop-shadow(0 0 3px #e74c3c);
+}
+
+.enemy-count {
+    color: #e74c3c;
+    font-weight: bold;
+    margin: 0;
+}
+
+.start-battle-btn {
+    padding: 20px 60px;
+    font-size: 1.3rem;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #c0392b 0%, #96281b 100%);
+    color: white;
+    letter-spacing: 0.2rem;
+    transition: all 0.3s ease;
+    box-shadow: 0 5px 20px rgba(192, 57, 43, 0.4);
+}
+
+.start-battle-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 40px rgba(192, 57, 43, 0.6);
+}
+
+/* ============================================
+   NEW CARD EFFECT STYLES
+   ============================================ */
+
+/* Traitor piece (Treason card) */
+.piece.traitor {
+    opacity: 0.6;
+    filter: grayscale(80%) sepia(50%) hue-rotate(180deg) drop-shadow(0 0 5px #9b59b6);
+}
+
+.piece.traitor::after {
+    content: '⚔';
+    position: absolute;
+    font-size: 16px;
+    top: -8px;
+    right: -8px;
+}
+
+/* Invulnerable piece (Divine Shield) */
+.piece.invulnerable {
+    filter: drop-shadow(0 0 10px #ffd700) drop-shadow(0 0 20px #ffd700);
+    animation: divine-pulse 1s ease-in-out infinite;
+}
+
+@keyframes divine-pulse {
+    0%, 100% { filter: drop-shadow(0 0 10px #ffd700) drop-shadow(0 0 20px #ffd700); }
+    50% { filter: drop-shadow(0 0 15px #fff) drop-shadow(0 0 30px #ffd700); }
+}
+
+.cell.shielded-highlight {
+    box-shadow: inset 0 0 0 4px #ffd700;
+    background: rgba(255, 215, 0, 0.1) !important;
+}
+
+/* Knight's Jump active indicator */
+.piece.knight-jump-active {
+    animation: knight-glow 0.5s ease-in-out infinite;
+}
+
+@keyframes knight-glow {
+    0%, 100% { filter: drop-shadow(0 0 5px #27ae60); }
+    50% { filter: drop-shadow(0 0 15px #2ecc71); }
+}
+
+/* Snipe mode indicator */
+.piece.snipe-active {
+    filter: drop-shadow(0 0 8px #e74c3c) drop-shadow(0 0 15px #c0392b);
+}
+
+.cell.piercing-capture {
+    background: rgba(231, 76, 60, 0.3) !important;
+    box-shadow: inset 0 0 0 3px rgba(231, 76, 60, 0.8);
+}
+
+/* Card specific border colors for new cards */
+.card[data-card="treason"] { border-color: #9b59b6; }
+.card[data-card="divineShield"] { border-color: #ffd700; }
+.card[data-card="knightJump"] { border-color: #27ae60; }
+.card[data-card="snipe"] { border-color: #e74c3c; }
+.card[data-card="timeWarp"] { border-color: #3498db; }
+
+/* Game over analysis styles */
+.overlay-content .analysis-text {
+    font-size: 1rem;
+    color: #aaa;
+    margin-top: 10px;
+    font-style: italic;
+}
+
+/* Game over buttons */
+.game-over-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.secondary-btn {
+    background: linear-gradient(135deg, #555 0%, #333 100%) !important;
+}
+
+.secondary-btn:hover {
+    box-shadow: 0 10px 30px rgba(100, 100, 100, 0.5) !important;
+}
+
+/* ============================================
+   CALTROPS TRAP STYLES
+   ============================================ */
+
+.trap {
+    position: absolute;
+    font-size: 28px;
+    color: #c0392b;
+    text-shadow: 0 0 10px rgba(192, 57, 43, 0.8);
+    animation: trap-pulse 1.5s ease-in-out infinite;
+    z-index: 1;
+}
+
+@keyframes trap-pulse {
+    0%, 100% {
+        opacity: 0.7;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+}
+
+.cell.has-trap {
+    background: rgba(192, 57, 43, 0.15) !important;
+}
+
+/* Card specific border colors for new cards */
+.card[data-card="caltrops"] { border-color: #c0392b; }
+.card[data-card="shieldBash"] { border-color: #3498db; }

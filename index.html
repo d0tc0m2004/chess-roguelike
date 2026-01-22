@@ -7,11 +7,78 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="game-container">
+    <!-- Loadout Screen -->
+    <div class="loadout-screen" id="loadout-screen">
+        <div class="loadout-container">
+            <h1 class="loadout-title">THE SPARTAN 300</h1>
+            <p class="loadout-subtitle">Choose your squad to face the enemy army</p>
+
+            <div class="loadout-army">
+                <div class="loadout-slot fixed">
+                    <div class="slot-label">COMMANDER</div>
+                    <div class="slot-piece">♔</div>
+                    <div class="slot-name">King</div>
+                    <div class="slot-desc">Must survive at all costs</div>
+                </div>
+
+                <div class="loadout-slot selectable" data-slot="1">
+                    <div class="slot-label">GUARD 1</div>
+                    <div class="slot-piece" id="slot1-piece">♕</div>
+                    <div class="slot-select">
+                        <select id="slot1-select">
+                            <option value="queen">Queen</option>
+                            <option value="rook">Rook</option>
+                            <option value="bishop">Bishop</option>
+                            <option value="knight">Knight</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="loadout-slot selectable" data-slot="2">
+                    <div class="slot-label">GUARD 2</div>
+                    <div class="slot-piece" id="slot2-piece">♖</div>
+                    <div class="slot-select">
+                        <select id="slot2-select">
+                            <option value="rook" selected>Rook</option>
+                            <option value="queen">Queen</option>
+                            <option value="bishop">Bishop</option>
+                            <option value="knight">Knight</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="loadout-slot selectable" data-slot="3">
+                    <div class="slot-label">GUARD 3</div>
+                    <div class="slot-piece" id="slot3-piece">♘</div>
+                    <div class="slot-select">
+                        <select id="slot3-select">
+                            <option value="knight" selected>Knight</option>
+                            <option value="queen">Queen</option>
+                            <option value="rook">Rook</option>
+                            <option value="bishop">Bishop</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="loadout-enemy-preview">
+                <h3>ENEMY FORCES</h3>
+                <div class="enemy-preview-pieces">
+                    <span class="enemy-piece-preview">♜♞♝♛♚♝♞♜</span>
+                    <span class="enemy-piece-preview">♟♟♟♟♟♟♟♟</span>
+                </div>
+                <p class="enemy-count">16 pieces - Full Chess Army</p>
+            </div>
+
+            <button id="start-battle-btn" class="start-battle-btn">START BATTLE</button>
+        </div>
+    </div>
+
+    <div class="game-container" id="game-container" style="display: none;">
         <header class="game-header">
-            <h1>CHESS ROGUELIKE</h1>
+            <h1>THE SPARTAN 300</h1>
             <div class="battle-info">
-                <span id="battle-number">Battle 1</span>
+                <span id="battle-number">4 vs 16</span>
                 <span id="turn-indicator">Your Turn</span>
                 <button id="help-btn" class="help-btn">?</button>
             </div>
@@ -54,7 +121,10 @@
             <div class="overlay-content">
                 <h2 id="game-over-text">Victory!</h2>
                 <p id="game-over-subtext">You defeated the enemy army!</p>
-                <button id="restart-btn">Play Again</button>
+                <div class="game-over-buttons">
+                    <button id="restart-btn">Play Again</button>
+                    <button id="change-squad-btn" class="secondary-btn">Change Squad</button>
+                </div>
             </div>
         </div>
 
@@ -97,14 +167,14 @@
                 </div>
 
                 <div class="help-section">
-                    <h3>Your CHEAT Cards</h3>
+                    <h3>Your TACTICAL Cards</h3>
                     <p>You can play up to <strong>3 cards per battle</strong>. <span class="highlight">Playing a card ends your turn</span> - you can't move AND play a card in the same turn!</p>
                     <div class="card-guide">
-                        <div class="card-row"><span class="card-name-guide">Stall</span> - Enemy skips their turn</div>
-                        <div class="card-row"><span class="card-name-guide">Teleport</span> - Move any of your pieces anywhere</div>
-                        <div class="card-row"><span class="card-name-guide">Freeze</span> - Enemy piece can't move for 2 turns</div>
-                        <div class="card-row"><span class="card-name-guide">Swap</span> - Exchange positions of any two pieces</div>
-                        <div class="card-row"><span class="card-name-guide">Promote</span> - Turn your Pawn into a Queen instantly</div>
+                        <div class="card-row"><span class="card-name-guide">Divine Shield</span> - Your piece cannot be captured for 1 round</div>
+                        <div class="card-row"><span class="card-name-guide">Knight's Jump</span> - All your pieces can move like Knights this turn</div>
+                        <div class="card-row"><span class="card-name-guide">Snipe</span> - Your ranged pieces can capture through one obstacle</div>
+                        <div class="card-row"><span class="card-name-guide">Caltrops</span> - Place a lethal trap on an empty square (enemies die if they step on it)</div>
+                        <div class="card-row"><span class="card-name-guide">Shield Bash</span> - Push an adjacent enemy 1 tile back; kills if they hit a wall or piece</div>
                     </div>
                 </div>
 
@@ -117,10 +187,11 @@
                     <h3>Tips</h3>
                     <ul>
                         <li>Watch the enemy intent - you can see their next move!</li>
-                        <li>Freeze the Queen - she's their most dangerous piece</li>
-                        <li>Swap can put your piece in attack position OR move their King into danger</li>
-                        <li>Promote a pawn early for a powerful Queen</li>
-                        <li>Don't waste cards - you only get 3 per battle!</li>
+                        <li>Place Caltrops where enemies want to move - trap their plans!</li>
+                        <li>Divine Shield your King when threatened - it buys you time</li>
+                        <li>Knight's Jump lets you escape surrounded positions</li>
+                        <li>Snipe through pawns to take out pieces behind them</li>
+                        <li>Shield Bash enemies against walls or into your traps!</li>
                     </ul>
                 </div>
 
