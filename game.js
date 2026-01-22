@@ -1180,32 +1180,23 @@ class ChessRoguelike {
             return;
         }
 
-        // Recalculate enemy move based on CURRENT board state
-        // (the old intent may no longer be valid after player's move)
-        this.calculateEnemyIntent();
+        // DYNAMIC INTENT: Discard old intent and fully re-evaluate the board
+        // The AI "rethinks" based on the player's actual move, not the projected one
+        this.enemyIntent = null;
 
-        // Execute the intended move
-        if (this.enemyIntent) {
-            const { piece, to } = this.enemyIntent;
+        // Show "thinking" indicator briefly
+        const intentText = document.getElementById('intent-text');
+        if (intentText) {
+            intentText.textContent = 'Rethinking...';
+        }
 
-            // Verify the piece still exists and move is valid
-            const pieceStillExists = this.enemyPieces.includes(piece);
-            const isFrozen = this.frozenPieces.has(piece.id);
-            const isTraitor = this.traitorPieces.has(piece.id);
-            const validMoves = pieceStillExists && !isFrozen && !isTraitor ? this.getValidMoves(piece, true) : [];
-            const moveStillValid = validMoves.some(m => m.row === to.row && m.col === to.col);
+        // Calculate the actual best move based on current board state
+        const bestMove = this.findBestEnemyMove();
 
-            if (!pieceStillExists || isFrozen || isTraitor || !moveStillValid) {
-                // Pick a different move
-                const altMove = this.findBestEnemyMove(piece);
-                if (altMove) {
-                    this.movePiece(altMove.piece, altMove.to.row, altMove.to.col);
-                    this.enemyMoveCount++;
-                }
-            } else {
-                this.movePiece(piece, to.row, to.col);
-                this.enemyMoveCount++;
-            }
+        if (bestMove) {
+            this.enemyIntent = bestMove; // Update intent for display
+            this.movePiece(bestMove.piece, bestMove.to.row, bestMove.to.col);
+            this.enemyMoveCount++;
         }
 
         // Decrement status effect counters
@@ -1317,8 +1308,8 @@ class ChessRoguelike {
                 }
             }
 
-            // Evaluate with minimax (depth 2, player's turn next)
-            const score = this.minimax(1, false, -Infinity, Infinity);
+            // Evaluate with minimax (depth 3, player's turn next)
+            const score = this.minimax(2, false, -Infinity, Infinity);
 
             // Undo the move
             piece.row = fromRow;
@@ -1443,9 +1434,14 @@ class ChessRoguelike {
     evaluateBoard() {
         let score = 0;
 
+        // Trade logic multipliers - enemy values player pieces higher (1.2x)
+        // to encourage trading when the player has fewer pieces
+        const ENEMY_VALUE_MULT = 1.0;
+        const PLAYER_VALUE_MULT = 1.2;
+
         // Material evaluation
         for (const piece of this.enemyPieces) {
-            score += PIECE_VALUES[piece.type];
+            score += PIECE_VALUES[piece.type] * ENEMY_VALUE_MULT;
 
             // Position bonus for knights
             if (piece.type === PIECES.KNIGHT && POSITION_BONUS.knight) {
@@ -1458,7 +1454,8 @@ class ChessRoguelike {
         }
 
         for (const piece of this.playerPieces) {
-            score -= PIECE_VALUES[piece.type];
+            // Player pieces valued 1.2x - encourages AI to trade
+            score -= PIECE_VALUES[piece.type] * PLAYER_VALUE_MULT;
 
             // Player position bonuses (mirrored)
             if (piece.type === PIECES.KNIGHT && POSITION_BONUS.knight) {
@@ -1491,13 +1488,22 @@ class ChessRoguelike {
 
         score += (enemyMobility - playerMobility) * 5;
 
-        // King safety - penalize if player king is close to enemy pieces
+        // King pressure - check if player king is under attack (in "check")
         const playerKing = this.playerPieces.find(p => p.type === PIECES.KING);
         if (playerKing) {
+            // Massive bonus if the player king can be captured (in check)
+            const kingInCheck = this.isSquareAttackedByEnemy(playerKing.row, playerKing.col);
+            if (kingInCheck) {
+                score += 500; // Huge bonus for putting king in check
+            }
+
+            // Proximity bonus - reward enemy pieces close to player king
             for (const enemyPiece of this.enemyPieces) {
                 const dist = Math.abs(playerKing.row - enemyPiece.row) + Math.abs(playerKing.col - enemyPiece.col);
                 if (dist <= 2) {
-                    score += 30; // Bonus for threatening the king
+                    score += 40; // Bonus for threatening the king
+                } else if (dist <= 4) {
+                    score += 15; // Smaller bonus for being nearby
                 }
             }
         }
@@ -1505,8 +1511,23 @@ class ChessRoguelike {
         return score;
     }
 
+    // Check if a square is attacked by any enemy piece
+    isSquareAttackedByEnemy(row, col) {
+        for (const enemyPiece of this.enemyPieces) {
+            if (this.frozenPieces.has(enemyPiece.id)) continue;
+            if (this.traitorPieces.has(enemyPiece.id)) continue;
+
+            const moves = this.getValidMoves(enemyPiece, true);
+            if (moves.some(m => m.row === row && m.col === col)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // Quiescence search - extends search on capture moves to avoid horizon effect
-    quiescence(alpha, beta, isMaximizing) {
+    // Max depth of 4 captures to prevent excessive computation
+    quiescence(alpha, beta, isMaximizing, depth = 4) {
         // Stand pat score - what we get if we do nothing
         const standPat = this.evaluateBoard();
 
@@ -1516,8 +1537,12 @@ class ChessRoguelike {
         if (!playerKing) return 100000;
         if (!enemyKing) return -100000;
 
+        // Depth limit - return stand pat if we've searched deep enough
+        if (depth === 0) return standPat;
+
         if (isMaximizing) {
             // Enemy's turn (maximizing)
+            // Stand pat acts as a floor - don't force bad captures
             if (standPat >= beta) return beta;
             if (standPat > alpha) alpha = standPat;
 
@@ -1532,6 +1557,10 @@ class ChessRoguelike {
                     // Only consider captures
                     if (!capturedPiece || capturedPiece.owner !== 'player') continue;
 
+                    // Delta pruning - skip if capture can't improve alpha
+                    const captureValue = PIECE_VALUES[capturedPiece.type];
+                    if (standPat + captureValue + 200 < alpha) continue;
+
                     const fromRow = piece.row;
                     const fromCol = piece.col;
 
@@ -1542,7 +1571,7 @@ class ChessRoguelike {
                     piece.col = move.col;
                     this.playerPieces = this.playerPieces.filter(p => p !== capturedPiece);
 
-                    const score = this.quiescence(alpha, beta, false);
+                    const score = this.quiescence(alpha, beta, false, depth - 1);
 
                     // Undo move
                     piece.row = fromRow;
@@ -1558,6 +1587,7 @@ class ChessRoguelike {
             return alpha;
         } else {
             // Player's turn (minimizing)
+            // Stand pat acts as a ceiling - don't force bad captures
             if (standPat <= alpha) return alpha;
             if (standPat < beta) beta = standPat;
 
@@ -1569,6 +1599,10 @@ class ChessRoguelike {
                     // Only consider captures
                     if (!capturedPiece || capturedPiece.owner !== 'enemy') continue;
 
+                    // Delta pruning - skip if capture can't improve beta
+                    const captureValue = PIECE_VALUES[capturedPiece.type];
+                    if (standPat - captureValue - 200 > beta) continue;
+
                     const fromRow = piece.row;
                     const fromCol = piece.col;
 
@@ -1579,7 +1613,7 @@ class ChessRoguelike {
                     piece.col = move.col;
                     this.enemyPieces = this.enemyPieces.filter(p => p !== capturedPiece);
 
-                    const score = this.quiescence(alpha, beta, true);
+                    const score = this.quiescence(alpha, beta, true, depth - 1);
 
                     // Undo move
                     piece.row = fromRow;
