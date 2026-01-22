@@ -67,17 +67,6 @@ const PIECE_VALUES = {
     pawn: 100
 };
 
-// Opening book for AI - ensures strong opening moves
-// enemyMoveCount tracks how many moves enemy has made (0 = first move)
-const OPENING_BOOK = [
-    // Move 1: Push e-pawn (e7->e5 equivalent: row 1, col 4 -> row 3, col 4)
-    { from: { row: 1, col: 4 }, to: { row: 3, col: 4 } },
-    // Move 2: Develop knight (g8->f6 equivalent: row 0, col 6 -> row 2, col 5)
-    { from: { row: 0, col: 6 }, to: { row: 2, col: 5 } },
-    // Move 3: Develop other knight (b8->c6 equivalent: row 0, col 1 -> row 2, col: 2)
-    { from: { row: 0, col: 1 }, to: { row: 2, col: 2 } },
-];
-
 // Position bonus tables for AI (knights prefer center, pawns prefer advancing)
 const POSITION_BONUS = {
     knight: [
@@ -1505,27 +1494,6 @@ class ChessRoguelike {
     }
 
     findBestEnemyMove(excludePiece = null) {
-        // Check opening book first
-        if (this.enemyMoveCount < OPENING_BOOK.length && !excludePiece) {
-            const bookMove = OPENING_BOOK[this.enemyMoveCount];
-            const piece = this.board[bookMove.from.row]?.[bookMove.from.col];
-
-            // Verify the piece exists, is an enemy piece, and the move is valid
-            if (piece && piece.owner === 'enemy' &&
-                !this.frozenPieces.has(piece.id) && !this.traitorPieces.has(piece.id)) {
-                const validMoves = this.getValidMoves(piece, true);
-                const isValidMove = validMoves.some(m => m.row === bookMove.to.row && m.col === bookMove.to.col);
-
-                if (isValidMove) {
-                    return {
-                        piece,
-                        from: { row: piece.row, col: piece.col },
-                        to: bookMove.to
-                    };
-                }
-            }
-        }
-
         let bestMove = null;
         let bestScore = -Infinity;
 
