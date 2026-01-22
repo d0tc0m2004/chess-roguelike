@@ -6,8 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chess Roguelike</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Stockfish.js for Grandmaster-level AI -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js"></script>
 </head>
 
 <body>
@@ -222,6 +220,8 @@
         </div>
     </div>
 
+    <!-- Custom AI System (must load before game.js) -->
+    <script src="js/ai-system.js"></script>
     <script src="game.js"></script>
 </body>
 

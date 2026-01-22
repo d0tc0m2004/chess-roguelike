@@ -131,9 +131,11 @@ class ChessRoguelike {
         // History for Time Warp
         this.boardHistory = [];
 
-        // Enemy AI
+        // Enemy AI - Custom Priority-Based System
         this.enemyIntent = null;
         this.skipEnemyTurn = false;
+        this.aiDifficulty = 'MEDIUM'; // 'EASY', 'MEDIUM', 'HARD'
+        this.aiArchetype = 'HUNTER';  // 'SWARM', 'HUNTER', 'WALL', 'TACTICIAN', 'AGGRESSOR'
 
         // Game analysis
         this.moveCount = 0;
@@ -141,258 +143,27 @@ class ChessRoguelike {
         this.piecesLost = 0;
         this.piecesCaptures = 0;
 
-        // Stockfish AI engine
-        this.stockfish = null;
-        this.stockfishReady = false;
-        this.stockfishPending = null;
-        this.initStockfish();
-
         this.initLoadout();
     }
 
     // ============================================
-    // STOCKFISH INTEGRATION
+    // AI SYSTEM HELPERS
     // ============================================
 
-    initStockfish() {
-        try {
-            // Try to initialize Stockfish as a Web Worker
-            if (typeof STOCKFISH === 'function') {
-                this.stockfish = STOCKFISH();
-                this.setupStockfishHandlers();
-            } else {
-                console.warn('Stockfish not available, falling back to minimax');
-            }
-        } catch (e) {
-            console.warn('Failed to initialize Stockfish:', e);
-            this.stockfish = null;
-        }
-    }
-
-    setupStockfishHandlers() {
-        if (!this.stockfish) return;
-
-        this.stockfish.onmessage = (event) => {
-            const message = typeof event === 'string' ? event : event.data;
-
-            if (message === 'uciok') {
-                this.stockfishReady = true;
-                // Set Stockfish options for faster play
-                this.stockfish.postMessage('setoption name Skill Level value 20');
-                this.stockfish.postMessage('isready');
-            } else if (message === 'readyok') {
-                this.stockfishReady = true;
-            } else if (message.startsWith('bestmove')) {
-                this.handleStockfishBestMove(message);
-            } else if (message.startsWith('info') && message.includes('pv')) {
-                this.handleStockfishInfo(message);
-            }
-        };
-
-        // Initialize UCI protocol
-        this.stockfish.postMessage('uci');
-    }
-
-    // Convert board state to FEN string
-    boardToFEN() {
-        const pieceToFEN = {
-            king: { player: 'K', enemy: 'k' },
-            queen: { player: 'Q', enemy: 'q' },
-            rook: { player: 'R', enemy: 'r' },
-            bishop: { player: 'B', enemy: 'b' },
-            knight: { player: 'N', enemy: 'n' },
-            pawn: { player: 'P', enemy: 'p' }
-        };
-
-        let fen = '';
-
-        // Board position
-        for (let row = 0; row < 8; row++) {
-            let emptyCount = 0;
-            for (let col = 0; col < 8; col++) {
-                const piece = this.board[row][col];
-                if (piece) {
-                    if (emptyCount > 0) {
-                        fen += emptyCount;
-                        emptyCount = 0;
-                    }
-                    fen += pieceToFEN[piece.type][piece.owner];
-                } else {
-                    emptyCount++;
-                }
-            }
-            if (emptyCount > 0) {
-                fen += emptyCount;
-            }
-            if (row < 7) {
-                fen += '/';
-            }
-        }
-
-        // Active color: 'b' for black (enemy's turn when we query Stockfish)
-        // We query Stockfish for the enemy's move, so it's always black's turn
-        fen += ' b';
-
-        // Castling availability (simplified - no castling in our game)
-        fen += ' -';
-
-        // En passant target square (simplified - none)
-        fen += ' -';
-
-        // Halfmove clock and fullmove number
-        fen += ' 0 1';
-
-        return fen;
-    }
-
-    // Parse algebraic move notation (e.g., "e2e4") to row/col
-    parseStockfishMove(moveStr) {
-        if (!moveStr || moveStr.length < 4) return null;
-
-        const files = 'abcdefgh';
-        const fromCol = files.indexOf(moveStr[0]);
-        const fromRow = 8 - parseInt(moveStr[1]);
-        const toCol = files.indexOf(moveStr[2]);
-        const toRow = 8 - parseInt(moveStr[3]);
-
-        if (fromCol < 0 || toCol < 0 || fromRow < 0 || fromRow > 7 || toRow < 0 || toRow > 7) {
-            return null;
-        }
-
+    getGameState() {
         return {
-            from: { row: fromRow, col: fromCol },
-            to: { row: toRow, col: toCol }
+            board: this.board,
+            playerPieces: this.playerPieces,
+            enemyPieces: this.enemyPieces,
+            frozenPieces: this.frozenPieces,
+            traitorPieces: this.traitorPieces,
+            invulnerablePieces: this.invulnerablePieces,
+            traps: this.traps
         };
     }
 
-    // Handle bestmove response from Stockfish
-    handleStockfishBestMove(message) {
-        const parts = message.split(' ');
-        const bestMoveIdx = parts.indexOf('bestmove');
-        if (bestMoveIdx >= 0 && parts[bestMoveIdx + 1]) {
-            const moveStr = parts[bestMoveIdx + 1];
-            const parsedMove = this.parseStockfishMove(moveStr);
-
-            if (this.stockfishPending) {
-                this.stockfishPending.bestMove = parsedMove;
-                this.stockfishPending.resolve(this.stockfishPending.candidates);
-            }
-        }
-    }
-
-    // Handle info lines with principal variations
-    handleStockfishInfo(message) {
-        if (!this.stockfishPending) return;
-
-        // Extract multipv number and pv moves
-        const multipvMatch = message.match(/multipv (\d+)/);
-        const pvMatch = message.match(/pv ([a-h][1-8][a-h][1-8])/);
-
-        if (multipvMatch && pvMatch) {
-            const pvNum = parseInt(multipvMatch[1]);
-            const moveStr = pvMatch[1];
-            const parsedMove = this.parseStockfishMove(moveStr);
-
-            if (parsedMove && pvNum <= 5) {
-                this.stockfishPending.candidates[pvNum - 1] = parsedMove;
-            }
-        }
-    }
-
-    // Get top candidate moves from Stockfish
-    async getStockfishCandidates(depth = 10, multiPV = 5) {
-        if (!this.stockfish || !this.stockfishReady) {
-            return null;
-        }
-
-        return new Promise((resolve, reject) => {
-            const timeout = setTimeout(() => {
-                this.stockfishPending = null;
-                resolve(null); // Timeout - fall back to minimax
-            }, 3000);
-
-            this.stockfishPending = {
-                candidates: [],
-                bestMove: null,
-                resolve: (candidates) => {
-                    clearTimeout(timeout);
-                    this.stockfishPending = null;
-                    resolve(candidates);
-                }
-            };
-
-            const fen = this.boardToFEN();
-            this.stockfish.postMessage(`position fen ${fen}`);
-            this.stockfish.postMessage(`go depth ${depth} multipv ${multiPV}`);
-        });
-    }
-
-    // Filter Stockfish moves through safety layer
-    filterStockfishMoves(candidates) {
-        if (!candidates || candidates.length === 0) return null;
-
-        for (const move of candidates) {
-            if (!move) continue;
-
-            const piece = this.board[move.from.row]?.[move.from.col];
-            if (!piece || piece.owner !== 'enemy') continue;
-
-            // Check 1: Reject moves to trapped squares
-            const trapKey = `${move.to.row},${move.to.col}`;
-            if (this.traps.has(trapKey)) {
-                continue; // REJECT - trap
-            }
-
-            // Check 2: Reject moves from frozen pieces
-            if (this.frozenPieces.has(piece.id)) {
-                continue; // REJECT - frozen
-            }
-
-            // Check 3: Reject moves from traitor pieces
-            if (this.traitorPieces.has(piece.id)) {
-                continue; // REJECT - traitor
-            }
-
-            // Check 4: Reject captures of invulnerable pieces
-            const targetPiece = this.board[move.to.row]?.[move.to.col];
-            if (targetPiece && this.invulnerablePieces.has(targetPiece.id)) {
-                continue; // REJECT - divine shield
-            }
-
-            // Check 5: Verify move is actually valid
-            const validMoves = this.getValidMoves(piece, true);
-            const isValid = validMoves.some(m => m.row === move.to.row && m.col === move.to.col);
-            if (!isValid) {
-                continue; // REJECT - not a valid move
-            }
-
-            // This move passes all checks!
-            return {
-                piece,
-                from: move.from,
-                to: { row: move.to.row, col: move.to.col }
-            };
-        }
-
-        return null; // All moves rejected
-    }
-
-    // Get best move using Stockfish with safety filter, falling back to minimax
-    async getBestHybridMove() {
-        // Try Stockfish first
-        const candidates = await this.getStockfishCandidates(10, 5);
-
-        if (candidates && candidates.length > 0) {
-            const safeMove = this.filterStockfishMoves(candidates);
-            if (safeMove) {
-                console.log('Using Stockfish move');
-                return safeMove;
-            }
-        }
-
-        // Fallback to minimax
-        console.log('Falling back to minimax');
-        return this.findBestEnemyMove();
+    getPlayerCards() {
+        return this.hand;
     }
 
     initLoadout() {
@@ -1486,7 +1257,7 @@ class ChessRoguelike {
         }, 800);
     }
 
-    async doEnemyTurn() {
+    doEnemyTurn() {
         if (this.skipEnemyTurn) {
             this.skipEnemyTurn = false;
             this.showCardInstructions('Enemy turn skipped!');
@@ -1497,27 +1268,38 @@ class ChessRoguelike {
             return;
         }
 
-        // DYNAMIC INTENT: Discard old intent and fully re-evaluate the board
-        // The AI "rethinks" based on the player's actual move, not the projected one
-        this.enemyIntent = null;
-
         // Show enemy turn banner
         this.showTurnBanner(false);
 
-        // Show "thinking" indicator - Stockfish is analyzing
+        // Show "thinking" indicator
         const intentText = document.getElementById('intent-text');
         if (intentText) {
-            intentText.textContent = 'Analyzing...';
+            intentText.textContent = 'Calculating...';
         }
 
-        // Use Stockfish hybrid move system with safety filter
-        // Falls back to minimax if Stockfish fails
-        const bestMove = await this.getBestHybridMove();
+        // DYNAMIC INTENT: Re-evaluate the board based on player's actual move
+        const gameState = this.getGameState();
+        const playerCards = this.getPlayerCards();
+
+        // Check if the previously intended move is still valid
+        let bestMove = null;
+        if (this.enemyIntent && EnemyAI.isMoveStillLegal(this.enemyIntent, gameState)) {
+            // Intent is still valid - use it
+            bestMove = this.enemyIntent;
+        } else {
+            // Intent is invalid or doesn't exist - recalculate
+            bestMove = EnemyAI.calculateBestMove(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+        }
 
         if (bestMove) {
             this.enemyIntent = bestMove; // Update intent for display
             this.movePiece(bestMove.piece, bestMove.to.row, bestMove.to.col);
             this.enemyMoveCount++;
+
+            // Log AI reasoning (for debugging)
+            if (bestMove.reasoning) {
+                console.log(`AI Move: ${bestMove.piece.type} - ${bestMove.reasoning} (Score: ${bestMove.score})`);
+            }
         }
 
         // Decrement status effect counters
@@ -1568,384 +1350,31 @@ class ChessRoguelike {
     }
 
     // ============================================
-    // ENEMY AI - MINIMAX WITH ALPHA-BETA
+    // ENEMY AI - CUSTOM PRIORITY-BASED SYSTEM
     // ============================================
 
     calculateEnemyIntent() {
-        const move = this.findBestEnemyMove();
+        // Use the new custom AI system
+        const gameState = this.getGameState();
+        const playerCards = this.getPlayerCards();
+        const move = EnemyAI.previewEnemyIntent(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
         this.enemyIntent = move;
     }
 
-    findBestEnemyMove(excludePiece = null) {
-        let bestMove = null;
-        let bestScore = -Infinity;
-
-        // Get all possible moves for enemy
-        const allMoves = [];
-        for (const piece of this.enemyPieces) {
-            if (excludePiece && piece === excludePiece) continue;
-            if (this.frozenPieces.has(piece.id)) continue;
-            if (this.traitorPieces.has(piece.id)) continue;
-
-            const moves = this.getValidMoves(piece, true);
-            for (const move of moves) {
-                allMoves.push({ piece, move });
-            }
-        }
-
-        // Use minimax to evaluate each move
-        for (const { piece, move } of allMoves) {
-            // Simulate the move
-            const capturedPiece = this.board[move.row][move.col];
-            const fromRow = piece.row;
-            const fromCol = piece.col;
-
-            // Make the move
-            this.board[fromRow][fromCol] = null;
-            this.board[move.row][move.col] = piece;
-            piece.row = move.row;
-            piece.col = move.col;
-            if (capturedPiece) {
-                if (capturedPiece.owner === 'player') {
-                    this.playerPieces = this.playerPieces.filter(p => p !== capturedPiece);
-                }
-            }
-
-            // Evaluate with minimax (depth 3, player's turn next)
-            const score = this.minimax(2, false, -Infinity, Infinity);
-
-            // Undo the move
-            piece.row = fromRow;
-            piece.col = fromCol;
-            this.board[fromRow][fromCol] = piece;
-            this.board[move.row][move.col] = capturedPiece;
-            if (capturedPiece && capturedPiece.owner === 'player') {
-                this.playerPieces.push(capturedPiece);
-            }
-
-            // Add small randomness to prevent predictable play
-            const finalScore = score + Math.random() * 5;
-
-            if (finalScore > bestScore) {
-                bestScore = finalScore;
-                bestMove = { piece, from: { row: fromRow, col: fromCol }, to: move };
-            }
-        }
-
-        return bestMove;
-    }
-
-    // Minimax with alpha-beta pruning
-    minimax(depth, isMaximizing, alpha, beta) {
-        // Check for terminal states
-        const playerKing = this.playerPieces.find(p => p.type === PIECES.KING);
-        const enemyKing = this.enemyPieces.find(p => p.type === PIECES.KING);
-
-        if (!playerKing) return 100000; // Enemy wins
-        if (!enemyKing) return -100000; // Player wins
-
-        // Depth limit reached - use quiescence search to avoid horizon effect
-        if (depth === 0) {
-            return this.quiescence(-Infinity, Infinity, isMaximizing);
-        }
-
-        if (isMaximizing) {
-            // Enemy's turn (maximizing)
-            let maxScore = -Infinity;
-
-            for (const piece of this.enemyPieces) {
-                if (this.frozenPieces.has(piece.id)) continue;
-                if (this.traitorPieces.has(piece.id)) continue;
-
-                const moves = this.getValidMoves(piece, true);
-                for (const move of moves) {
-                    // Simulate move
-                    const capturedPiece = this.board[move.row][move.col];
-                    const fromRow = piece.row;
-                    const fromCol = piece.col;
-
-                    this.board[fromRow][fromCol] = null;
-                    this.board[move.row][move.col] = piece;
-                    piece.row = move.row;
-                    piece.col = move.col;
-                    if (capturedPiece && capturedPiece.owner === 'player') {
-                        this.playerPieces = this.playerPieces.filter(p => p !== capturedPiece);
-                    }
-
-                    const score = this.minimax(depth - 1, false, alpha, beta);
-
-                    // Undo move
-                    piece.row = fromRow;
-                    piece.col = fromCol;
-                    this.board[fromRow][fromCol] = piece;
-                    this.board[move.row][move.col] = capturedPiece;
-                    if (capturedPiece && capturedPiece.owner === 'player') {
-                        this.playerPieces.push(capturedPiece);
-                    }
-
-                    maxScore = Math.max(maxScore, score);
-                    alpha = Math.max(alpha, score);
-                    if (beta <= alpha) break; // Pruning
-                }
-                if (beta <= alpha) break;
-            }
-
-            return maxScore;
-        } else {
-            // Player's turn (minimizing from enemy perspective)
-            let minScore = Infinity;
-
-            for (const piece of this.playerPieces) {
-                const moves = this.getValidMoves(piece, false);
-                for (const move of moves) {
-                    // Simulate move
-                    const capturedPiece = this.board[move.row][move.col];
-                    const fromRow = piece.row;
-                    const fromCol = piece.col;
-
-                    this.board[fromRow][fromCol] = null;
-                    this.board[move.row][move.col] = piece;
-                    piece.row = move.row;
-                    piece.col = move.col;
-                    if (capturedPiece && capturedPiece.owner === 'enemy') {
-                        this.enemyPieces = this.enemyPieces.filter(p => p !== capturedPiece);
-                    }
-
-                    const score = this.minimax(depth - 1, true, alpha, beta);
-
-                    // Undo move
-                    piece.row = fromRow;
-                    piece.col = fromCol;
-                    this.board[fromRow][fromCol] = piece;
-                    this.board[move.row][move.col] = capturedPiece;
-                    if (capturedPiece && capturedPiece.owner === 'enemy') {
-                        this.enemyPieces.push(capturedPiece);
-                    }
-
-                    minScore = Math.min(minScore, score);
-                    beta = Math.min(beta, score);
-                    if (beta <= alpha) break; // Pruning
-                }
-                if (beta <= alpha) break;
-            }
-
-            return minScore;
+    // Set AI difficulty: 'EASY', 'MEDIUM', 'HARD'
+    setAIDifficulty(difficulty) {
+        if (['EASY', 'MEDIUM', 'HARD'].includes(difficulty)) {
+            this.aiDifficulty = difficulty;
+            console.log(`AI Difficulty set to: ${difficulty}`);
         }
     }
 
-    // Evaluate board position (positive = good for enemy)
-    evaluateBoard() {
-        let score = 0;
-
-        // Trade logic multipliers - enemy values player pieces higher (1.2x)
-        // to encourage trading when the player has fewer pieces
-        const ENEMY_VALUE_MULT = 1.0;
-        const PLAYER_VALUE_MULT = 1.2;
-
-        // Material evaluation
-        for (const piece of this.enemyPieces) {
-            score += PIECE_VALUES[piece.type] * ENEMY_VALUE_MULT;
-
-            // Position bonus for knights
-            if (piece.type === PIECES.KNIGHT && POSITION_BONUS.knight) {
-                score += POSITION_BONUS.knight[piece.row][piece.col];
-            }
-            // Position bonus for pawns (advancing is good)
-            if (piece.type === PIECES.PAWN && POSITION_BONUS.pawn) {
-                score += POSITION_BONUS.pawn[piece.row][piece.col];
-            }
+    // Set AI archetype: 'SWARM', 'HUNTER', 'WALL', 'TACTICIAN', 'AGGRESSOR'
+    setAIArchetype(archetype) {
+        if (['SWARM', 'HUNTER', 'WALL', 'TACTICIAN', 'AGGRESSOR'].includes(archetype)) {
+            this.aiArchetype = archetype;
+            console.log(`AI Archetype set to: ${archetype}`);
         }
-
-        for (const piece of this.playerPieces) {
-            // Player pieces valued 1.2x - encourages AI to trade
-            score -= PIECE_VALUES[piece.type] * PLAYER_VALUE_MULT;
-
-            // Player position bonuses (mirrored)
-            if (piece.type === PIECES.KNIGHT && POSITION_BONUS.knight) {
-                const mirroredRow = BOARD_ROWS - 1 - piece.row;
-                if (mirroredRow >= 0 && mirroredRow < 8) {
-                    score -= POSITION_BONUS.knight[mirroredRow][piece.col];
-                }
-            }
-            if (piece.type === PIECES.PAWN && POSITION_BONUS.pawn) {
-                const mirroredRow = BOARD_ROWS - 1 - piece.row;
-                if (mirroredRow >= 0 && mirroredRow < 8) {
-                    score -= POSITION_BONUS.pawn[mirroredRow][piece.col];
-                }
-            }
-        }
-
-        // Mobility bonus - more moves = better position
-        let enemyMobility = 0;
-        let playerMobility = 0;
-
-        for (const piece of this.enemyPieces) {
-            if (!this.frozenPieces.has(piece.id) && !this.traitorPieces.has(piece.id)) {
-                enemyMobility += this.getValidMoves(piece, true).length;
-            }
-        }
-
-        for (const piece of this.playerPieces) {
-            playerMobility += this.getValidMoves(piece, false).length;
-        }
-
-        score += (enemyMobility - playerMobility) * 5;
-
-        // King pressure - check if player king is under attack (in "check")
-        const playerKing = this.playerPieces.find(p => p.type === PIECES.KING);
-        if (playerKing) {
-            // Massive bonus if the player king can be captured (in check)
-            const kingInCheck = this.isSquareAttackedByEnemy(playerKing.row, playerKing.col);
-            if (kingInCheck) {
-                score += 500; // Huge bonus for putting king in check
-            }
-
-            // Proximity bonus - reward enemy pieces close to player king
-            for (const enemyPiece of this.enemyPieces) {
-                const dist = Math.abs(playerKing.row - enemyPiece.row) + Math.abs(playerKing.col - enemyPiece.col);
-                if (dist <= 2) {
-                    score += 40; // Bonus for threatening the king
-                } else if (dist <= 4) {
-                    score += 15; // Smaller bonus for being nearby
-                }
-            }
-        }
-
-        return score;
-    }
-
-    // Check if a square is attacked by any enemy piece
-    isSquareAttackedByEnemy(row, col) {
-        for (const enemyPiece of this.enemyPieces) {
-            if (this.frozenPieces.has(enemyPiece.id)) continue;
-            if (this.traitorPieces.has(enemyPiece.id)) continue;
-
-            const moves = this.getValidMoves(enemyPiece, true);
-            if (moves.some(m => m.row === row && m.col === col)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // Quiescence search - extends search on capture moves to avoid horizon effect
-    // Max depth of 4 captures to prevent excessive computation
-    quiescence(alpha, beta, isMaximizing, depth = 4) {
-        // Stand pat score - what we get if we do nothing
-        const standPat = this.evaluateBoard();
-
-        // Check for terminal states
-        const playerKing = this.playerPieces.find(p => p.type === PIECES.KING);
-        const enemyKing = this.enemyPieces.find(p => p.type === PIECES.KING);
-        if (!playerKing) return 100000;
-        if (!enemyKing) return -100000;
-
-        // Depth limit - return stand pat if we've searched deep enough
-        if (depth === 0) return standPat;
-
-        if (isMaximizing) {
-            // Enemy's turn (maximizing)
-            // Stand pat acts as a floor - don't force bad captures
-            if (standPat >= beta) return beta;
-            if (standPat > alpha) alpha = standPat;
-
-            // Only look at capture moves
-            for (const piece of this.enemyPieces) {
-                if (this.frozenPieces.has(piece.id)) continue;
-                if (this.traitorPieces.has(piece.id)) continue;
-
-                const moves = this.getValidMoves(piece, true);
-                for (const move of moves) {
-                    const capturedPiece = this.board[move.row][move.col];
-                    // Only consider captures
-                    if (!capturedPiece || capturedPiece.owner !== 'player') continue;
-
-                    // Delta pruning - skip if capture can't improve alpha
-                    const captureValue = PIECE_VALUES[capturedPiece.type];
-                    if (standPat + captureValue + 200 < alpha) continue;
-
-                    const fromRow = piece.row;
-                    const fromCol = piece.col;
-
-                    // Make the move
-                    this.board[fromRow][fromCol] = null;
-                    this.board[move.row][move.col] = piece;
-                    piece.row = move.row;
-                    piece.col = move.col;
-                    this.playerPieces = this.playerPieces.filter(p => p !== capturedPiece);
-
-                    const score = this.quiescence(alpha, beta, false, depth - 1);
-
-                    // Undo move
-                    piece.row = fromRow;
-                    piece.col = fromCol;
-                    this.board[fromRow][fromCol] = piece;
-                    this.board[move.row][move.col] = capturedPiece;
-                    this.playerPieces.push(capturedPiece);
-
-                    if (score >= beta) return beta;
-                    if (score > alpha) alpha = score;
-                }
-            }
-            return alpha;
-        } else {
-            // Player's turn (minimizing)
-            // Stand pat acts as a ceiling - don't force bad captures
-            if (standPat <= alpha) return alpha;
-            if (standPat < beta) beta = standPat;
-
-            // Only look at capture moves
-            for (const piece of this.playerPieces) {
-                const moves = this.getValidMoves(piece, false);
-                for (const move of moves) {
-                    const capturedPiece = this.board[move.row][move.col];
-                    // Only consider captures
-                    if (!capturedPiece || capturedPiece.owner !== 'enemy') continue;
-
-                    // Delta pruning - skip if capture can't improve beta
-                    const captureValue = PIECE_VALUES[capturedPiece.type];
-                    if (standPat - captureValue - 200 > beta) continue;
-
-                    const fromRow = piece.row;
-                    const fromCol = piece.col;
-
-                    // Make the move
-                    this.board[fromRow][fromCol] = null;
-                    this.board[move.row][move.col] = piece;
-                    piece.row = move.row;
-                    piece.col = move.col;
-                    this.enemyPieces = this.enemyPieces.filter(p => p !== capturedPiece);
-
-                    const score = this.quiescence(alpha, beta, true, depth - 1);
-
-                    // Undo move
-                    piece.row = fromRow;
-                    piece.col = fromCol;
-                    this.board[fromRow][fromCol] = piece;
-                    this.board[move.row][move.col] = capturedPiece;
-                    this.enemyPieces.push(capturedPiece);
-
-                    if (score <= alpha) return alpha;
-                    if (score < beta) beta = score;
-                }
-            }
-            return beta;
-        }
-    }
-
-    findClosestPlayerPiece(row, col) {
-        let closest = null;
-        let minDist = Infinity;
-
-        for (const piece of this.playerPieces) {
-            const dist = Math.abs(row - piece.row) + Math.abs(col - piece.col);
-            if (dist < minDist) {
-                minDist = dist;
-                closest = piece;
-            }
-        }
-
-        return closest;
     }
 
     // ============================================
