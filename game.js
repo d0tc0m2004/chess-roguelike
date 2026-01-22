@@ -39,7 +39,7 @@ const CARDS = {
     },
     snipe: {
         name: 'Snipe',
-        effect: 'Ranged pieces can capture through one obstacle.',
+        effect: 'Ranged pieces can capture through one obstacle (Cannot target King).',
         rarity: 'rare',
         action: 'instant'
     },
@@ -998,6 +998,10 @@ class ChessRoguelike {
                         continue;
                     } else if (obstacleCount === 2 && target.owner !== piece.owner) {
                         // Second piece behind first obstacle - can capture with piercing
+                        // King's armor is too thick - cannot be targeted by piercing shots
+                        if (target.type === PIECES.KING) {
+                            break;
+                        }
                         if (!this.invulnerablePieces.has(target.id)) {
                             // Check if this move isn't already in moves
                             if (!moves.some(m => m.row === row && m.col === col)) {
