@@ -1378,6 +1378,12 @@ class ChessRoguelike {
     }
 
     capturePiece(piece) {
+        // Spawn particle effects at capture location
+        this.spawnCaptureParticles(piece.row, piece.col, piece.owner);
+
+        // Screen shake effect
+        this.triggerScreenShake();
+
         if (piece.owner === 'player') {
             this.playerPieces = this.playerPieces.filter(p => p !== piece);
             this.invulnerablePieces.delete(piece.id);
@@ -1386,6 +1392,77 @@ class ChessRoguelike {
             this.frozenPieces.delete(piece.id);
             this.traitorPieces.delete(piece.id);
         }
+    }
+
+    // ============================================
+    // VISUAL EFFECTS (Juice)
+    // ============================================
+
+    // Spawn particle explosion on capture
+    spawnCaptureParticles(row, col, owner) {
+        const board = document.getElementById('board');
+        if (!board) return;
+
+        const rect = board.getBoundingClientRect();
+        const cellSize = 65;
+        const padding = 12;
+        const centerX = rect.left + padding + col * cellSize + cellSize / 2;
+        const centerY = rect.top + padding + row * cellSize + cellSize / 2;
+
+        const colors = owner === 'player'
+            ? ['#00d2ff', '#0088cc', '#66aadd', '#ffffff']
+            : ['#ff4444', '#ff6666', '#cc0000', '#ffaa00'];
+
+        for (let i = 0; i < 12; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+
+            const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
+            const distance = 40 + Math.random() * 60;
+            const tx = Math.cos(angle) * distance;
+            const ty = Math.sin(angle) * distance;
+
+            particle.style.cssText = `
+                left: ${centerX}px;
+                top: ${centerY}px;
+                width: ${6 + Math.random() * 8}px;
+                height: ${6 + Math.random() * 8}px;
+                background: ${colors[Math.floor(Math.random() * colors.length)]};
+                box-shadow: 0 0 ${4 + Math.random() * 6}px currentColor;
+                --tx: ${tx}px;
+                --ty: ${ty}px;
+            `;
+
+            document.body.appendChild(particle);
+
+            // Remove particle after animation
+            setTimeout(() => particle.remove(), 800);
+        }
+    }
+
+    // Trigger screen shake effect
+    triggerScreenShake() {
+        const gameContainer = document.querySelector('.game-container');
+        if (gameContainer) {
+            gameContainer.classList.add('shake');
+            setTimeout(() => gameContainer.classList.remove('shake'), 400);
+        }
+    }
+
+    // Show turn banner
+    showTurnBanner(isPlayerTurn) {
+        // Remove existing banner if any
+        const existingBanner = document.querySelector('.turn-banner');
+        if (existingBanner) existingBanner.remove();
+
+        const banner = document.createElement('div');
+        banner.className = `turn-banner ${isPlayerTurn ? 'player-turn' : 'enemy-turn-banner'} show`;
+        banner.textContent = isPlayerTurn ? 'YOUR TURN' : 'ENEMY TURN';
+
+        document.body.appendChild(banner);
+
+        // Remove after animation
+        setTimeout(() => banner.remove(), 1500);
     }
 
     // ============================================
@@ -1424,6 +1501,9 @@ class ChessRoguelike {
         // The AI "rethinks" based on the player's actual move, not the projected one
         this.enemyIntent = null;
 
+        // Show enemy turn banner
+        this.showTurnBanner(false);
+
         // Show "thinking" indicator - Stockfish is analyzing
         const intentText = document.getElementById('intent-text');
         if (intentText) {
@@ -1453,6 +1533,9 @@ class ChessRoguelike {
         this.saveBoardState(); // Save state for Time Warp
         this.calculateEnemyIntent();
         this.render();
+
+        // Show turn banner
+        this.showTurnBanner(true);
     }
 
     updateStatusEffects() {
