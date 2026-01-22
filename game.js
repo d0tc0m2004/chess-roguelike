@@ -26,8 +26,8 @@ const PIECE_SYMBOLS = {
 
 const CARDS = {
     divineShield: {
-        name: 'Divine Shield',
-        effect: 'Your piece cannot be captured for 1 round.',
+        name: 'Diamond Form',
+        effect: 'Target piece becomes Invulnerable but Cannot Move for 1 round.',
         rarity: 'rare',
         action: 'selectPlayerPiece'
     },
@@ -66,6 +66,17 @@ const PIECE_VALUES = {
     knight: 320,
     pawn: 100
 };
+
+// Opening book for AI - ensures strong opening moves
+// enemyMoveCount tracks how many moves enemy has made (0 = first move)
+const OPENING_BOOK = [
+    // Move 1: Push e-pawn (e7->e5 equivalent: row 1, col 4 -> row 3, col 4)
+    { from: { row: 1, col: 4 }, to: { row: 3, col: 4 } },
+    // Move 2: Develop knight (g8->f6 equivalent: row 0, col 6 -> row 2, col 5)
+    { from: { row: 0, col: 6 }, to: { row: 2, col: 5 } },
+    // Move 3: Develop other knight (b8->c6 equivalent: row 0, col 1 -> row 2, col: 2)
+    { from: { row: 0, col: 1 }, to: { row: 2, col: 2 } },
+];
 
 // Position bonus tables for AI (knights prefer center, pawns prefer advancing)
 const POSITION_BONUS = {
@@ -137,6 +148,7 @@ class ChessRoguelike {
 
         // Game analysis
         this.moveCount = 0;
+        this.enemyMoveCount = 0;
         this.piecesLost = 0;
         this.piecesCaptures = 0;
 
@@ -223,6 +235,7 @@ class ChessRoguelike {
         this.traps.clear();
         this.boardHistory = [];
         this.moveCount = 0;
+        this.enemyMoveCount = 0;
         this.piecesLost = 0;
         this.piecesCaptures = 0;
 
@@ -375,8 +388,8 @@ class ChessRoguelike {
                         pieceEl.classList.add('traitor');
                     }
                     if (this.invulnerablePieces.has(piece.id)) {
-                        pieceEl.classList.add('invulnerable');
-                        cell.classList.add('shielded-highlight');
+                        pieceEl.classList.add('diamond-form');
+                        cell.classList.add('diamond-highlight');
                     }
                     if (this.knightJumpActive && piece.owner === 'player') {
                         pieceEl.classList.add('knight-jump-active');
@@ -654,7 +667,7 @@ class ChessRoguelike {
             case 'selectPlayerPiece':
                 this.cardState = { type: 'selectPlayerPiece', card: cardId };
                 if (cardId === 'divineShield') {
-                    this.showCardInstructions('Select one of your pieces to protect with Divine Shield.');
+                    this.showCardInstructions('Select a piece to enter Diamond Form (Invulnerable + Immobile).');
                 }
                 break;
             case 'selectEmpty':
@@ -804,10 +817,10 @@ class ChessRoguelike {
         this.finishCardPlay();
     }
 
-    // Divine Shield: Piece cannot be captured for 1 round
+    // Diamond Form: Piece becomes invulnerable but cannot move for 1 round
     executeDivineShield(piece) {
         this.invulnerablePieces.set(piece.id, 2); // 2 = lasts through enemy turn + next player turn
-        this.showCardInstructions(`${piece.type} protected by Divine Shield!`);
+        this.showCardInstructions(`${piece.type} enters Diamond Form - Invulnerable but immobile!`);
         setTimeout(() => this.clearCardInstructions(), 1500);
 
         // Recalculate enemy intent since they can't capture this piece
@@ -832,6 +845,11 @@ class ChessRoguelike {
     getValidMoves(piece, forAI = false) {
         // Traitor pieces cannot move
         if (this.traitorPieces.has(piece.id)) {
+            return [];
+        }
+
+        // Diamond Form (invulnerable) pieces cannot move - they are in stasis
+        if (this.invulnerablePieces.has(piece.id)) {
             return [];
         }
 
@@ -1182,9 +1200,11 @@ class ChessRoguelike {
                 const altMove = this.findBestEnemyMove(piece);
                 if (altMove) {
                     this.movePiece(altMove.piece, altMove.to.row, altMove.to.col);
+                    this.enemyMoveCount++;
                 }
             } else {
                 this.movePiece(piece, to.row, to.col);
+                this.enemyMoveCount++;
             }
         }
 
@@ -1242,6 +1262,27 @@ class ChessRoguelike {
     }
 
     findBestEnemyMove(excludePiece = null) {
+        // Check opening book first
+        if (this.enemyMoveCount < OPENING_BOOK.length && !excludePiece) {
+            const bookMove = OPENING_BOOK[this.enemyMoveCount];
+            const piece = this.board[bookMove.from.row]?.[bookMove.from.col];
+
+            // Verify the piece exists, is an enemy piece, and the move is valid
+            if (piece && piece.owner === 'enemy' &&
+                !this.frozenPieces.has(piece.id) && !this.traitorPieces.has(piece.id)) {
+                const validMoves = this.getValidMoves(piece, true);
+                const isValidMove = validMoves.some(m => m.row === bookMove.to.row && m.col === bookMove.to.col);
+
+                if (isValidMove) {
+                    return {
+                        piece,
+                        from: { row: piece.row, col: piece.col },
+                        to: bookMove.to
+                    };
+                }
+            }
+        }
+
         let bestMove = null;
         let bestScore = -Infinity;
 
@@ -1309,9 +1350,9 @@ class ChessRoguelike {
         if (!playerKing) return 100000; // Enemy wins
         if (!enemyKing) return -100000; // Player wins
 
-        // Depth limit reached - evaluate board
+        // Depth limit reached - use quiescence search to avoid horizon effect
         if (depth === 0) {
-            return this.evaluateBoard();
+            return this.quiescence(-Infinity, Infinity, isMaximizing);
         }
 
         if (isMaximizing) {
@@ -1464,6 +1505,97 @@ class ChessRoguelike {
         return score;
     }
 
+    // Quiescence search - extends search on capture moves to avoid horizon effect
+    quiescence(alpha, beta, isMaximizing) {
+        // Stand pat score - what we get if we do nothing
+        const standPat = this.evaluateBoard();
+
+        // Check for terminal states
+        const playerKing = this.playerPieces.find(p => p.type === PIECES.KING);
+        const enemyKing = this.enemyPieces.find(p => p.type === PIECES.KING);
+        if (!playerKing) return 100000;
+        if (!enemyKing) return -100000;
+
+        if (isMaximizing) {
+            // Enemy's turn (maximizing)
+            if (standPat >= beta) return beta;
+            if (standPat > alpha) alpha = standPat;
+
+            // Only look at capture moves
+            for (const piece of this.enemyPieces) {
+                if (this.frozenPieces.has(piece.id)) continue;
+                if (this.traitorPieces.has(piece.id)) continue;
+
+                const moves = this.getValidMoves(piece, true);
+                for (const move of moves) {
+                    const capturedPiece = this.board[move.row][move.col];
+                    // Only consider captures
+                    if (!capturedPiece || capturedPiece.owner !== 'player') continue;
+
+                    const fromRow = piece.row;
+                    const fromCol = piece.col;
+
+                    // Make the move
+                    this.board[fromRow][fromCol] = null;
+                    this.board[move.row][move.col] = piece;
+                    piece.row = move.row;
+                    piece.col = move.col;
+                    this.playerPieces = this.playerPieces.filter(p => p !== capturedPiece);
+
+                    const score = this.quiescence(alpha, beta, false);
+
+                    // Undo move
+                    piece.row = fromRow;
+                    piece.col = fromCol;
+                    this.board[fromRow][fromCol] = piece;
+                    this.board[move.row][move.col] = capturedPiece;
+                    this.playerPieces.push(capturedPiece);
+
+                    if (score >= beta) return beta;
+                    if (score > alpha) alpha = score;
+                }
+            }
+            return alpha;
+        } else {
+            // Player's turn (minimizing)
+            if (standPat <= alpha) return alpha;
+            if (standPat < beta) beta = standPat;
+
+            // Only look at capture moves
+            for (const piece of this.playerPieces) {
+                const moves = this.getValidMoves(piece, false);
+                for (const move of moves) {
+                    const capturedPiece = this.board[move.row][move.col];
+                    // Only consider captures
+                    if (!capturedPiece || capturedPiece.owner !== 'enemy') continue;
+
+                    const fromRow = piece.row;
+                    const fromCol = piece.col;
+
+                    // Make the move
+                    this.board[fromRow][fromCol] = null;
+                    this.board[move.row][move.col] = piece;
+                    piece.row = move.row;
+                    piece.col = move.col;
+                    this.enemyPieces = this.enemyPieces.filter(p => p !== capturedPiece);
+
+                    const score = this.quiescence(alpha, beta, true);
+
+                    // Undo move
+                    piece.row = fromRow;
+                    piece.col = fromCol;
+                    this.board[fromRow][fromCol] = piece;
+                    this.board[move.row][move.col] = capturedPiece;
+                    this.enemyPieces.push(capturedPiece);
+
+                    if (score <= alpha) return alpha;
+                    if (score < beta) beta = score;
+                }
+            }
+            return beta;
+        }
+    }
+
     findClosestPlayerPiece(row, col) {
         let closest = null;
         let minDist = Infinity;
@@ -1576,7 +1708,7 @@ class ChessRoguelike {
         if (remainingEnemies >= 14) {
             analysis += `Tip: Focus on using your cards strategically!`;
         } else if (remainingEnemies >= 10) {
-            analysis += `Tip: Try using Divine Shield to protect key pieces.`;
+            analysis += `Tip: Try using Diamond Form to block enemy attacks.`;
         } else if (remainingEnemies >= 6) {
             analysis += `Tip: Time Warp can undo critical mistakes.`;
         } else {
@@ -1611,6 +1743,7 @@ class ChessRoguelike {
         this.skipEnemyTurn = false;
         this.enemyIntent = null;
         this.moveCount = 0;
+        this.enemyMoveCount = 0;
         this.piecesLost = 0;
         this.piecesCaptures = 0;
 

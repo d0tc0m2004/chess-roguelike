@@ -239,3 +239,21 @@ For the first playable build:
 - Browser-based
 
 **Goal:** Test if "small army + broken cards vs full army" feels fun and strategic.
+
+---
+
+## Future Ideas for V2
+
+### 1. XP / Mana System (Resource Management)
+Instead of a hard limit of 3 cards per battle, introduce a dynamic resource system:
+- **Starting XP:** Player starts with 20 XP.
+- **Earning XP:** Gained by capturing enemy pieces.
+    - Pawn: +10 XP
+    - Knight/Bishop: +20 XP
+    - Rook: +30 XP
+    - Queen: +50 XP
+- **Spending XP:** Cards cost XP to play.
+    - Weak cards (Nudge): 10 XP
+    - Strong cards (Freeze): 30 XP
+    - Ultimate cards (Mind Control): 60 XP
+- **Goal:** Creates a snowball effect where aggressive play unlocks more tactical options.
