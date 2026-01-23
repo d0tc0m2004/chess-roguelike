@@ -488,16 +488,16 @@ const FORMATION_POOLS = {
 // BATTLE PROGRESSION
 // ============================================
 const BATTLE_PROGRESSION = [
-    { battle: 1, pool: 'TUTORIAL', difficulty: 'EASY' },
-    { battle: 2, pool: 'TUTORIAL', difficulty: 'EASY' },
-    { battle: 3, pool: 'EASY', difficulty: 'EASY' },
-    { battle: 4, pool: 'EASY', difficulty: 'MEDIUM' },
-    { battle: 5, pool: 'MEDIUM', difficulty: 'MEDIUM' },
-    { battle: 6, pool: 'MEDIUM', difficulty: 'MEDIUM' },
-    { battle: 7, pool: 'HARD', difficulty: 'MEDIUM' },
+    { battle: 1, pool: 'TUTORIAL', difficulty: 'HARD' },
+    { battle: 2, pool: 'TUTORIAL', difficulty: 'HARD' },
+    { battle: 3, pool: 'EASY', difficulty: 'HARD' },
+    { battle: 4, pool: 'EASY', difficulty: 'HARD' },
+    { battle: 5, pool: 'MEDIUM', difficulty: 'HARD' },
+    { battle: 6, pool: 'MEDIUM', difficulty: 'HARD' },
+    { battle: 7, pool: 'HARD', difficulty: 'HARD' },
     { battle: 8, pool: 'HARD', difficulty: 'HARD' },
     { battle: 9, pool: 'EXPERT', difficulty: 'HARD' },
-    { battle: 10, pool: 'BOSS', difficulty: 'HARD' }
+    { battle: 10, pool: 'BOSS', difficulty: 'BRUTAL' }
 ];
 
 // ============================================
