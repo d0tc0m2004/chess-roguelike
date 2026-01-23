@@ -41,14 +41,21 @@ const FORMATIONS = {
     lonePawns: {
         id: 'lonePawns',
         name: 'Scattered Pawns',
-        description: 'Disorganized pawns with their King.',
+        description: 'A horde of angry pawns.',
         difficulty: 1,
         archetype: 'PASSIVE',
         pieces: [
             { type: 'king', row: 0, col: 4 },
-            { type: 'pawn', row: 1, col: 1 },
-            { type: 'pawn', row: 2, col: 6 },
-            { type: 'pawn', row: 3, col: 3 }
+            { type: 'pawn', row: 1, col: 0 },
+            { type: 'pawn', row: 1, col: 2 },
+            { type: 'pawn', row: 1, col: 4 },
+            { type: 'pawn', row: 1, col: 6 },
+            { type: 'pawn', row: 2, col: 1 },
+            { type: 'pawn', row: 2, col: 3 },
+            { type: 'pawn', row: 2, col: 5 },
+            { type: 'pawn', row: 2, col: 7 },
+            { type: 'pawn', row: 3, col: 2 },
+            { type: 'pawn', row: 3, col: 4 }
         ]
     },
 
@@ -577,6 +584,8 @@ function setupFormation(game, formation) {
 
     // Set AI archetype based on formation
     game.aiArchetype = formation.archetype || 'HUNTER';
+
+    console.log(`[Formation] Setup complete: ${formation.name} with ${game.enemyPieces.length} pieces.`);
 
     return formation;
 }
