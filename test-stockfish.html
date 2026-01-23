@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Stockfish Test</title>
+</head>
+
+<body>
+    <h1>Stockfish Test</h1>
+    <div id="output" style="white-space: pre; font-family: monospace; background: #f0f0f0; padding: 20px;"></div>
+
+    <script>
+        const output = document.getElementById('output');
+
+        function log(msg) {
+            output.textContent += msg + '\n';
+            console.log(msg);
+        }
+
+        log('Creating Stockfish worker...');
+
+        const worker = new Worker('js/stockfish-worker.js');
+
+        worker.onmessage = function (e) {
+            const msg = typeof e.data === 'string' ? e.data : JSON.stringify(e.data);
+            log('Stockfish: ' + msg);
+
+            if (msg === 'uciok') {
+                log('');
+                log('SUCCESS! Stockfish is working!');
+                log('');
+                log('Testing a position...');
+                worker.postMessage('position startpos');
+                worker.postMessage('go depth 10');
+            }
+
+            if (msg.startsWith('bestmove')) {
+                log('');
+                log('Stockfish calculated a move successfully!');
+                log('Everything is working correctly.');
+            }
+        };
+
+        worker.onerror = function (e) {
+            log('ERROR: ' + e.message);
+        };
+
+        // Start UCI protocol
+        worker.postMessage('uci');
+    </script>
+</body>
+
+</html>

@@ -118,7 +118,7 @@ class StockfishEngine {
 const stockfishEngine = new StockfishEngine();
 
 // Initialize Stockfish on load
-stockfishEngine.init();
+// stockfishEngine.init(); // DISABLED: Using chess-ai.js instead
 
 // ============================================
 // AI ARCHETYPES
@@ -872,21 +872,21 @@ class EnemyAI {
 
         switch (piece.type) {
             case 'king':
-                for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+                for (const [dr, dc] of [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]) {
                     this.addPlayerMoveIfValid(piece, piece.row + dr, piece.col + dc, board, moves, gameState);
                 }
                 break;
             case 'queen':
-                this.addPlayerSlidingMoves(piece, [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]], board, moves, gameState);
+                this.addPlayerSlidingMoves(piece, [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]], board, moves, gameState);
                 break;
             case 'rook':
-                this.addPlayerSlidingMoves(piece, [[-1,0],[1,0],[0,-1],[0,1]], board, moves, gameState);
+                this.addPlayerSlidingMoves(piece, [[-1, 0], [1, 0], [0, -1], [0, 1]], board, moves, gameState);
                 break;
             case 'bishop':
-                this.addPlayerSlidingMoves(piece, [[-1,-1],[-1,1],[1,-1],[1,1]], board, moves, gameState);
+                this.addPlayerSlidingMoves(piece, [[-1, -1], [-1, 1], [1, -1], [1, 1]], board, moves, gameState);
                 break;
             case 'knight':
-                for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+                for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
                     this.addPlayerMoveIfValid(piece, piece.row + dr, piece.col + dc, board, moves, gameState);
                 }
                 break;
@@ -1132,7 +1132,7 @@ class EnemyAI {
     }
 
     static addKingMoves(piece, board, moves, gameState) {
-        const directions = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+        const directions = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
         for (const [dr, dc] of directions) {
             this.addMoveIfValid(piece, piece.row + dr, piece.col + dc, board, moves, gameState);
         }
@@ -1144,7 +1144,7 @@ class EnemyAI {
     }
 
     static addRookMoves(piece, board, moves, gameState) {
-        const directions = [[-1,0],[1,0],[0,-1],[0,1]];
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
         for (const [dr, dc] of directions) {
             for (let i = 1; i < 8; i++) {
                 const row = piece.row + dr * i;
@@ -1156,7 +1156,7 @@ class EnemyAI {
     }
 
     static addBishopMoves(piece, board, moves, gameState) {
-        const directions = [[-1,-1],[-1,1],[1,-1],[1,1]];
+        const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
         for (const [dr, dc] of directions) {
             for (let i = 1; i < 8; i++) {
                 const row = piece.row + dr * i;
@@ -1168,7 +1168,7 @@ class EnemyAI {
     }
 
     static addKnightMoves(piece, board, moves, gameState) {
-        const jumps = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+        const jumps = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
         for (const [dr, dc] of jumps) {
             this.addMoveIfValid(piece, piece.row + dr, piece.col + dc, board, moves, gameState);
         }
@@ -1651,7 +1651,7 @@ class EnemyAI {
         if (!playerKing) return false;
 
         // Check if any of our pieces now pins a player piece to their king
-        const directions = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
 
         for (const [dr, dc] of directions) {
             let firstPiece = null;
@@ -1756,26 +1756,26 @@ class EnemyAI {
 
         switch (piece.type) {
             case 'king':
-                for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+                for (const [dr, dc] of [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]) {
                     const r = position.row + dr;
                     const c = position.col + dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({row: r, col: c});
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({ row: r, col: c });
                 }
                 break;
             case 'queen':
-                this.addSlidingAttacks(position, [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]], board, squares);
+                this.addSlidingAttacks(position, [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]], board, squares);
                 break;
             case 'rook':
-                this.addSlidingAttacks(position, [[-1,0],[1,0],[0,-1],[0,1]], board, squares);
+                this.addSlidingAttacks(position, [[-1, 0], [1, 0], [0, -1], [0, 1]], board, squares);
                 break;
             case 'bishop':
-                this.addSlidingAttacks(position, [[-1,-1],[-1,1],[1,-1],[1,1]], board, squares);
+                this.addSlidingAttacks(position, [[-1, -1], [-1, 1], [1, -1], [1, 1]], board, squares);
                 break;
             case 'knight':
-                for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+                for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
                     const r = position.row + dr;
                     const c = position.col + dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({row: r, col: c});
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({ row: r, col: c });
                 }
                 break;
             case 'pawn':
@@ -1783,7 +1783,7 @@ class EnemyAI {
                 for (const dc of [-1, 1]) {
                     const r = position.row + 1; // Enemy pawns attack downward
                     const c = position.col + dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({row: r, col: c});
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({ row: r, col: c });
                 }
                 break;
         }
@@ -1797,7 +1797,7 @@ class EnemyAI {
                 const r = position.row + dr * i;
                 const c = position.col + dc * i;
                 if (r < 0 || r >= 8 || c < 0 || c >= 8) break;
-                squares.push({row: r, col: c});
+                squares.push({ row: r, col: c });
                 if (board[r][c]) break; // Stop at first piece
             }
         }
@@ -1819,26 +1819,26 @@ class EnemyAI {
 
         switch (piece.type) {
             case 'king':
-                for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+                for (const [dr, dc] of [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]) {
                     const r = position.row + dr;
                     const c = position.col + dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({row: r, col: c});
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({ row: r, col: c });
                 }
                 break;
             case 'queen':
-                this.addSlidingAttacks(position, [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]], board, squares);
+                this.addSlidingAttacks(position, [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]], board, squares);
                 break;
             case 'rook':
-                this.addSlidingAttacks(position, [[-1,0],[1,0],[0,-1],[0,1]], board, squares);
+                this.addSlidingAttacks(position, [[-1, 0], [1, 0], [0, -1], [0, 1]], board, squares);
                 break;
             case 'bishop':
-                this.addSlidingAttacks(position, [[-1,-1],[-1,1],[1,-1],[1,1]], board, squares);
+                this.addSlidingAttacks(position, [[-1, -1], [-1, 1], [1, -1], [1, 1]], board, squares);
                 break;
             case 'knight':
-                for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+                for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
                     const r = position.row + dr;
                     const c = position.col + dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({row: r, col: c});
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({ row: r, col: c });
                 }
                 break;
             case 'pawn':
@@ -1846,7 +1846,7 @@ class EnemyAI {
                 for (const dc of [-1, 1]) {
                     const r = position.row - 1;
                     const c = position.col + dc;
-                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({row: r, col: c});
+                    if (r >= 0 && r < 8 && c >= 0 && c < 8) squares.push({ row: r, col: c });
                 }
                 break;
         }
@@ -1918,7 +1918,7 @@ class EnemyAI {
     }
 
     static isInKnightRangeOfPlayer(position, gameState) {
-        const knightMoves = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+        const knightMoves = [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]];
         for (const piece of gameState.playerPieces) {
             for (const [dr, dc] of knightMoves) {
                 if (position.row === piece.row + dr && position.col === piece.col + dc) {
@@ -2008,7 +2008,7 @@ class EnemyAI {
     }
 
     static isBlockingPlayerPiece(position, gameState) {
-        const directions = [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
         for (const piece of gameState.playerPieces) {
             for (const [dr, dc] of directions) {
                 // Check if we're in line between player piece and a target

@@ -408,25 +408,25 @@ class ChessRoguelike {
 
         if (battleNum <= 2) {
             pool = 'TUTORIAL';
-            difficulty = 'EASY';
+            difficulty = 'BRUTAL';
         } else if (battleNum <= 4) {
             pool = 'EASY';
-            difficulty = 'EASY';
+            difficulty = 'BRUTAL';
         } else if (battleNum <= 6) {
             pool = 'MEDIUM';
-            difficulty = 'MEDIUM';
+            difficulty = 'BRUTAL';
         } else if (battleNum <= 8) {
             pool = 'HARD';
-            difficulty = 'MEDIUM';
+            difficulty = 'BRUTAL';
         } else {
             pool = 'EXPERT';
-            difficulty = 'HARD';
+            difficulty = 'BRUTAL';
         }
 
         // Battle 10 is always a boss
         if (battleNum === 10) {
             pool = 'BOSS';
-            difficulty = 'HARD';
+            difficulty = 'BRUTAL';
         }
 
         // Get random formation from pool
@@ -1415,7 +1415,7 @@ class ChessRoguelike {
     }
 
     addKingMoves(piece, moves, forAI) {
-        for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+        for (const [dr, dc] of [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]) {
             this.addMoveIfValid(piece, piece.row + dr, piece.col + dc, moves, forAI);
         }
     }
@@ -1427,7 +1427,7 @@ class ChessRoguelike {
 
     addRookMoves(piece, moves, forAI, extraRange = 0, canGhostWalk = false) {
         const maxRange = 7 + extraRange;
-        for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
+        for (const [dr, dc] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
             for (let i = 1; i <= maxRange; i++) {
                 const row = piece.row + dr * i;
                 const col = piece.col + dc * i;
@@ -1456,7 +1456,7 @@ class ChessRoguelike {
 
     addBishopMoves(piece, moves, forAI, extraRange = 0, canGhostWalk = false) {
         const maxRange = 7 + extraRange;
-        for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+        for (const [dr, dc] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
             for (let i = 1; i <= maxRange; i++) {
                 const row = piece.row + dr * i;
                 const col = piece.col + dc * i;
@@ -1484,7 +1484,7 @@ class ChessRoguelike {
     }
 
     addKnightMoves(piece, moves, forAI) {
-        for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
+        for (const [dr, dc] of [[-2, -1], [-2, 1], [-1, -2], [-1, 2], [1, -2], [1, 2], [2, -1], [2, 1]]) {
             this.addMoveIfValid(piece, piece.row + dr, piece.col + dc, moves, forAI);
         }
     }
@@ -1527,15 +1527,15 @@ class ChessRoguelike {
     }
 
     addPiercingMoves(piece, moves) {
-        const dirs = piece.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]] :
-                     piece.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]] :
-                     [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+        const dirs = piece.type === 'rook' ? [[-1, 0], [1, 0], [0, -1], [0, 1]] :
+            piece.type === 'bishop' ? [[-1, -1], [-1, 1], [1, -1], [1, 1]] :
+                [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
 
         for (const [dr, dc] of dirs) {
             let obstacles = 0;
             for (let i = 1; i < 8; i++) {
-                const row = piece.row + dr*i;
-                const col = piece.col + dc*i;
+                const row = piece.row + dr * i;
+                const col = piece.col + dc * i;
                 if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= 8) break;
 
                 const target = this.board[row][col];
@@ -1596,7 +1596,7 @@ class ChessRoguelike {
                 this.showCardInstructions('Checkmate Denied! Your King survives!');
                 // King survives - don't capture, just move attacker nearby
                 // Find adjacent empty square for attacker
-                const adjSquares = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+                const adjSquares = [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]];
                 for (const [dr, dc] of adjSquares) {
                     const r = toRow + dr;
                     const c = toCol + dc;
@@ -1683,7 +1683,7 @@ class ChessRoguelike {
 
     triggerChainReaction(row, col) {
         let damaged = 0;
-        for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+        for (const [dr, dc] of [[-1, -1], [-1, 0], [-1, 1], [0, -1], [0, 1], [1, -1], [1, 0], [1, 1]]) {
             const r = row + dr, c = col + dc;
             if (r >= 0 && r < BOARD_ROWS && c >= 0 && c < 8) {
                 const adj = this.board[r][c];
