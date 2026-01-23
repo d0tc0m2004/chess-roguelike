@@ -22,15 +22,19 @@ const FORMATIONS = {
     pawnWall: {
         id: 'pawnWall',
         name: 'The Pawn Wall',
-        description: 'A simple line of pawns. Good for learning.',
+        description: 'A solid line of pawns. Harder than it looks.',
         difficulty: 1,
         archetype: 'PASSIVE',
         pieces: [
             { type: 'king', row: 0, col: 4 },
+            { type: 'pawn', row: 2, col: 0 },
+            { type: 'pawn', row: 2, col: 1 },
             { type: 'pawn', row: 2, col: 2 },
             { type: 'pawn', row: 2, col: 3 },
             { type: 'pawn', row: 2, col: 4 },
-            { type: 'pawn', row: 2, col: 5 }
+            { type: 'pawn', row: 2, col: 5 },
+            { type: 'pawn', row: 2, col: 6 },
+            { type: 'pawn', row: 2, col: 7 }
         ]
     },
 
@@ -51,12 +55,14 @@ const FORMATIONS = {
     knightIntro: {
         id: 'knightIntro',
         name: 'Knight Apprentice',
-        description: 'A single Knight guards the King.',
+        description: 'Two Knights guard the King.',
         difficulty: 2,
         archetype: 'PASSIVE',
         pieces: [
             { type: 'king', row: 0, col: 4 },
             { type: 'knight', row: 1, col: 2 },
+            { type: 'knight', row: 1, col: 5 },
+            { type: 'pawn', row: 2, col: 2 },
             { type: 'pawn', row: 2, col: 3 },
             { type: 'pawn', row: 2, col: 4 },
             { type: 'pawn', row: 2, col: 5 }
@@ -66,15 +72,17 @@ const FORMATIONS = {
     bishopIntro: {
         id: 'bishopIntro',
         name: 'Bishop\'s Blessing',
-        description: 'A Bishop watches over the pawns.',
+        description: 'Twin Bishops watch over the pawns.',
         difficulty: 2,
         archetype: 'PASSIVE',
         pieces: [
             { type: 'king', row: 0, col: 4 },
             { type: 'bishop', row: 1, col: 2 },
+            { type: 'bishop', row: 1, col: 5 },
             { type: 'pawn', row: 2, col: 1 },
             { type: 'pawn', row: 2, col: 3 },
-            { type: 'pawn', row: 2, col: 5 }
+            { type: 'pawn', row: 2, col: 4 },
+            { type: 'pawn', row: 2, col: 6 }
         ]
     },
 
@@ -118,16 +126,17 @@ const FORMATIONS = {
     rookTower: {
         id: 'rookTower',
         name: 'The Tower',
-        description: 'A Rook stands guard.',
+        description: 'Two Rooks stand guard.',
         difficulty: 4,
         archetype: 'WALL',
         pieces: [
             { type: 'king', row: 0, col: 4 },
             { type: 'rook', row: 0, col: 0 },
+            { type: 'rook', row: 0, col: 7 },
             { type: 'pawn', row: 1, col: 0 },
             { type: 'pawn', row: 1, col: 3 },
             { type: 'pawn', row: 1, col: 4 },
-            { type: 'pawn', row: 1, col: 5 }
+            { type: 'pawn', row: 1, col: 7 }
         ]
     },
 
@@ -157,12 +166,14 @@ const FORMATIONS = {
     queensGuard: {
         id: 'queensGuard',
         name: 'Queen\'s Guard',
-        description: 'The Queen leads a small escort.',
+        description: 'The Queen leads a heavy escort.',
         difficulty: 5,
         archetype: 'HUNTER',
         pieces: [
             { type: 'king', row: 0, col: 4 },
             { type: 'queen', row: 1, col: 3 },
+            { type: 'rook', row: 1, col: 0 },
+            { type: 'rook', row: 1, col: 7 },
             { type: 'pawn', row: 2, col: 2 },
             { type: 'pawn', row: 2, col: 3 },
             { type: 'pawn', row: 2, col: 4 },
@@ -376,8 +387,10 @@ const FORMATIONS = {
             { type: 'queen', row: 1, col: 6 },
             { type: 'rook', row: 0, col: 0 },
             { type: 'rook', row: 0, col: 7 },
+            { type: 'pawn', row: 2, col: 2 },
             { type: 'pawn', row: 2, col: 3 },
-            { type: 'pawn', row: 2, col: 4 }
+            { type: 'pawn', row: 2, col: 4 },
+            { type: 'pawn', row: 2, col: 5 }
         ]
     },
 
@@ -403,7 +416,7 @@ const FORMATIONS = {
     theWall: {
         id: 'theWall',
         name: 'The Great Wall',
-        description: 'An impenetrable defensive formation.',
+        description: 'Two rows of defenders. Impenetrable.',
         difficulty: 10,
         archetype: 'WALL',
         pieces: [
@@ -422,7 +435,9 @@ const FORMATIONS = {
             { type: 'pawn', row: 2, col: 4 },
             { type: 'pawn', row: 2, col: 5 },
             { type: 'pawn', row: 2, col: 6 },
-            { type: 'pawn', row: 2, col: 7 }
+            { type: 'pawn', row: 2, col: 7 },
+            { type: 'rook', row: 1, col: 0 },
+            { type: 'rook', row: 1, col: 7 }
         ]
     },
 
@@ -453,21 +468,23 @@ const FORMATIONS = {
     deathSquad: {
         id: 'deathSquad',
         name: 'Death Squad',
-        description: 'All heavy pieces. No mercy.',
+        description: 'An army of Queens and Rooks. No mercy.',
         difficulty: 10,
         archetype: 'AGGRESSOR',
         pieces: [
             { type: 'king', row: 0, col: 4 },
             { type: 'queen', row: 1, col: 3 },
-            { type: 'queen', row: 1, col: 5 },
+            { type: 'queen', row: 1, col: 4 },
+            { type: 'queen', row: 2, col: 0 },
+            { type: 'queen', row: 2, col: 7 },
             { type: 'rook', row: 0, col: 0 },
             { type: 'rook', row: 0, col: 7 },
-            { type: 'rook', row: 2, col: 2 },
-            { type: 'rook', row: 2, col: 5 },
+            { type: 'rook', row: 1, col: 1 },
+            { type: 'rook', row: 1, col: 6 },
             { type: 'bishop', row: 0, col: 2 },
             { type: 'bishop', row: 0, col: 5 },
-            { type: 'knight', row: 3, col: 1 },
-            { type: 'knight', row: 3, col: 6 }
+            { type: 'knight', row: 3, col: 2 },
+            { type: 'knight', row: 3, col: 5 }
         ]
     }
 };
