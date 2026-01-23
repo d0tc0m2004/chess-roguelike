@@ -1754,19 +1754,14 @@ class ChessRoguelike {
             }
         }
 
-        // If no Zugzwang move, use normal AI
-        if (!bestMove) {
-            // Check if cached intent is still valid
-            if (this.enemyIntent && typeof EnemyAI !== 'undefined' && EnemyAI.isMoveStillLegal(this.enemyIntent, gameState)) {
-                bestMove = this.enemyIntent;
-            } else if (typeof EnemyAI !== 'undefined') {
-                // Use async Stockfish-powered AI
-                try {
-                    bestMove = await EnemyAI.calculateBestMoveAsync(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
-                } catch (err) {
-                    console.warn('Async AI failed, using fallback:', err);
-                    bestMove = EnemyAI.calculateBestMoveFallback(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
-                }
+        // If no Zugzwang move, ALWAYS recalculate based on current board state
+        // This makes AI responsive to player's actual move
+        if (!bestMove && typeof EnemyAI !== 'undefined') {
+            try {
+                bestMove = await EnemyAI.calculateBestMoveAsync(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+            } catch (err) {
+                console.warn('Async AI failed, using fallback:', err);
+                bestMove = EnemyAI.calculateBestMoveFallback(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
             }
         }
 
