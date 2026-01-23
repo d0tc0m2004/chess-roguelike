@@ -280,12 +280,42 @@
         </div>
     </div>
 
+    <!-- Promote Card Modal -->
+    <div class="overlay card-modal" id="promote-overlay" style="display: none;">
+        <div class="overlay-content card-modal-content">
+            <h2>PROMOTE PAWN</h2>
+            <p>Choose a piece type:</p>
+            <div class="promote-options">
+                <button class="promote-btn" data-type="knight">
+                    <span class="promote-icon">&#9816;</span>
+                    <span>Knight</span>
+                </button>
+                <button class="promote-btn" data-type="bishop">
+                    <span class="promote-icon">&#9815;</span>
+                    <span>Bishop</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Resurrect Card Modal -->
+    <div class="overlay card-modal" id="resurrect-overlay" style="display: none;">
+        <div class="overlay-content card-modal-content">
+            <h2>RESURRECT</h2>
+            <p>Select a captured piece to bring back:</p>
+            <div class="resurrect-pieces" id="resurrect-pieces">
+                <!-- Captured pieces inserted by JS -->
+            </div>
+            <button class="secondary-btn" id="cancel-resurrect">CANCEL</button>
+        </div>
+    </div>
+
     <!-- Game Systems (must load in order) -->
-    <script src="js/cards.js?v=2"></script>
-    <script src="js/formations.js?v=2"></script>
-    <script src="js/ai-system.js?v=2"></script>
-    <script src="js/chess-ai.js?v=2"></script>
-    <script src="game.js?v=2"></script>
+    <script src="js/cards.js?v=4"></script>
+    <script src="js/formations.js?v=3"></script>
+    <script src="js/ai-system.js?v=3"></script>
+    <script src="js/chess-ai.js?v=3"></script>
+    <script src="game.js?v=4"></script>
 </body>
 
 </html>

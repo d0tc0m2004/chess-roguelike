@@ -330,7 +330,7 @@ const CARD_DEFINITIONS = {
                 piece: target,
                 options: ['knight', 'bishop']
             };
-            game.showCardInstructions('Choose: Knight or Bishop?');
+            game.showPromoteOverlay();
         }
     },
 
@@ -524,7 +524,7 @@ const CARD_DEFINITIONS = {
                 type: 'selectCaptured',
                 card: 'resurrect'
             };
-            game.showCardInstructions('Select a captured piece to resurrect.');
+            game.showResurrectOverlay();
         }
     },
 

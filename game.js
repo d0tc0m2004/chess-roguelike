@@ -207,6 +207,19 @@ class ChessRoguelike {
                 this.hideDeckView();
             }
         });
+
+        // Promote card buttons
+        document.querySelectorAll('.promote-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const pieceType = btn.dataset.type;
+                this.handlePromoteSelection(pieceType);
+            });
+        });
+
+        // Resurrect cancel button
+        document.getElementById('cancel-resurrect')?.addEventListener('click', () => {
+            this.hideResurrectOverlay();
+        });
     }
 
     updateLoadoutDisplay() {
@@ -1266,6 +1279,12 @@ class ChessRoguelike {
             case 'selectDirection':
                 this.executeDirectionAction(row, col);
                 break;
+            case 'selectPromotion':
+                // Handled by overlay, not board click
+                break;
+            case 'selectCaptured':
+                // Handled by overlay, not board click
+                break;
         }
 
         this.render();
@@ -1318,6 +1337,17 @@ class ChessRoguelike {
                 this.clearCardInstructions();
                 this.render();
                 break;
+            case 'resurrectPlace':
+                // Place resurrected piece
+                const resurrected = this.cardState.piece;
+                resurrected.row = row;
+                resurrected.col = col;
+                resurrected.id = `resurrected-${Date.now()}`;
+                this.board[row][col] = resurrected;
+                this.playerPieces.push(resurrected);
+                this.showCardInstructions(`${resurrected.type} resurrected!`);
+                this.finishCardPlay();
+                break;
         }
     }
 
@@ -1367,6 +1397,102 @@ class ChessRoguelike {
         } else {
             this.render();
         }
+    }
+
+    // ============================================
+    // CARD MODAL HANDLERS (Promote, Resurrect)
+    // ============================================
+
+    showPromoteOverlay() {
+        const overlay = document.getElementById('promote-overlay');
+        if (overlay) {
+            overlay.style.display = 'flex';
+            overlay.classList.add('active');
+        }
+    }
+
+    hidePromoteOverlay() {
+        const overlay = document.getElementById('promote-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+            overlay.classList.remove('active');
+        }
+    }
+
+    handlePromoteSelection(pieceType) {
+        if (!this.cardState || this.cardState.card !== 'promote') return;
+
+        const pawn = this.cardState.piece;
+        if (pawn) {
+            pawn.type = pieceType;
+            this.showCardInstructions(`Pawn promoted to ${pieceType}!`);
+        }
+
+        this.hidePromoteOverlay();
+        this.finishCardPlay();
+    }
+
+    showResurrectOverlay() {
+        const overlay = document.getElementById('resurrect-overlay');
+        const piecesContainer = document.getElementById('resurrect-pieces');
+
+        if (!overlay || !piecesContainer) return;
+
+        // Clear previous
+        piecesContainer.innerHTML = '';
+
+        // Get piece symbols
+        const symbols = {
+            king: '&#9812;', queen: '&#9813;', rook: '&#9814;',
+            bishop: '&#9815;', knight: '&#9816;', pawn: '&#9817;'
+        };
+
+        // Add captured pieces
+        for (let i = 0; i < this.capturedPlayerPieces.length; i++) {
+            const piece = this.capturedPlayerPieces[i];
+            const btn = document.createElement('button');
+            btn.className = 'resurrect-piece';
+            btn.dataset.index = i;
+            btn.innerHTML = `
+                <span class="piece-icon">${symbols[piece.type] || '?'}</span>
+                <span class="piece-name">${piece.type}</span>
+            `;
+            btn.addEventListener('click', () => this.handleResurrectSelection(i));
+            piecesContainer.appendChild(btn);
+        }
+
+        overlay.style.display = 'flex';
+        overlay.classList.add('active');
+    }
+
+    hideResurrectOverlay() {
+        const overlay = document.getElementById('resurrect-overlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+            overlay.classList.remove('active');
+        }
+        this.cardState = null;
+        this.selectedCard = null;
+        this.render();
+    }
+
+    handleResurrectSelection(index) {
+        const piece = this.capturedPlayerPieces[index];
+        if (!piece) return;
+
+        // Remove from captured list
+        this.capturedPlayerPieces.splice(index, 1);
+
+        // Store for placement
+        this.cardState = {
+            type: 'selectEmpty',
+            card: 'resurrectPlace',
+            piece: piece
+        };
+
+        this.hideResurrectOverlay();
+        this.showCardInstructions(`Select an empty square to place the ${piece.type}.`);
+        this.render();
     }
 
     // ============================================
