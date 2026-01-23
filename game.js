@@ -1894,6 +1894,181 @@ class ChessRoguelike {
             this.onBattleVictory();
             return;
         }
+
+        // Check for checkmate (enemy king in check with no escape)
+        if (this.isCheckmate('enemy')) {
+            this.onBattleVictory();
+            return;
+        }
+    }
+
+    // Check if a square is attacked by pieces of a given owner
+    isSquareAttackedBy(row, col, attackerOwner) {
+        const pieces = attackerOwner === 'player' ? this.playerPieces : this.enemyPieces;
+
+        for (const piece of pieces) {
+            if (this.frozenPieces.has(piece.id)) continue;
+
+            const validMoves = this.getBasicAttacks(piece);
+            if (validMoves.some(m => m.row === row && m.col === col)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // Get basic attack squares for a piece (without card modifiers)
+    getBasicAttacks(piece) {
+        const attacks = [];
+
+        switch (piece.type) {
+            case PIECES.PAWN: {
+                const dir = piece.owner === 'enemy' ? 1 : -1;
+                // Pawns attack diagonally
+                const leftAttack = { row: piece.row + dir, col: piece.col - 1 };
+                const rightAttack = { row: piece.row + dir, col: piece.col + 1 };
+                if (leftAttack.col >= 0 && leftAttack.row >= 0 && leftAttack.row < BOARD_ROWS) {
+                    attacks.push(leftAttack);
+                }
+                if (rightAttack.col < 8 && rightAttack.row >= 0 && rightAttack.row < BOARD_ROWS) {
+                    attacks.push(rightAttack);
+                }
+                break;
+            }
+            case PIECES.KNIGHT: {
+                const offsets = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+                for (const [dr, dc] of offsets) {
+                    const r = piece.row + dr, c = piece.col + dc;
+                    if (r >= 0 && r < BOARD_ROWS && c >= 0 && c < 8) {
+                        attacks.push({ row: r, col: c });
+                    }
+                }
+                break;
+            }
+            case PIECES.KING: {
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const r = piece.row + dr, c = piece.col + dc;
+                        if (r >= 0 && r < BOARD_ROWS && c >= 0 && c < 8) {
+                            attacks.push({ row: r, col: c });
+                        }
+                    }
+                }
+                break;
+            }
+            case PIECES.ROOK: {
+                this.addSlidingAttacks(piece, attacks, [[0,1],[0,-1],[1,0],[-1,0]]);
+                break;
+            }
+            case PIECES.BISHOP: {
+                this.addSlidingAttacks(piece, attacks, [[1,1],[1,-1],[-1,1],[-1,-1]]);
+                break;
+            }
+            case PIECES.QUEEN: {
+                this.addSlidingAttacks(piece, attacks, [[0,1],[0,-1],[1,0],[-1,0],[1,1],[1,-1],[-1,1],[-1,-1]]);
+                break;
+            }
+        }
+
+        return attacks;
+    }
+
+    addSlidingAttacks(piece, attacks, directions) {
+        for (const [dr, dc] of directions) {
+            for (let i = 1; i <= 7; i++) {
+                const r = piece.row + dr * i;
+                const c = piece.col + dc * i;
+                if (r < 0 || r >= BOARD_ROWS || c < 0 || c >= 8) break;
+
+                attacks.push({ row: r, col: c });
+
+                // Stop if there's a piece (can attack it but not beyond)
+                if (this.board[r]?.[c]) break;
+            }
+        }
+    }
+
+    // Check if a king is in check
+    isKingInCheck(kingOwner) {
+        const king = kingOwner === 'player'
+            ? this.playerPieces.find(p => p.type === PIECES.KING)
+            : this.enemyPieces.find(p => p.type === PIECES.KING);
+
+        if (!king) return false;
+
+        const attackerOwner = kingOwner === 'player' ? 'enemy' : 'player';
+        return this.isSquareAttackedBy(king.row, king.col, attackerOwner);
+    }
+
+    // Check if it's checkmate (king in check + no legal moves escape check)
+    isCheckmate(kingOwner) {
+        // First check if king is in check
+        if (!this.isKingInCheck(kingOwner)) {
+            return false;
+        }
+
+        const pieces = kingOwner === 'player' ? this.playerPieces : this.enemyPieces;
+        const attackerOwner = kingOwner === 'player' ? 'enemy' : 'player';
+
+        // Check if any piece has a move that gets out of check
+        for (const piece of pieces) {
+            if (this.frozenPieces.has(piece.id)) continue;
+
+            const moves = this.getValidMoves(piece, true);
+
+            for (const move of moves) {
+                // Simulate the move
+                const originalBoard = this.board.map(row => [...row]);
+                const originalPieces = kingOwner === 'player'
+                    ? this.playerPieces.map(p => ({ ...p }))
+                    : this.enemyPieces.map(p => ({ ...p }));
+                const originalEnemyPieces = kingOwner === 'player'
+                    ? this.enemyPieces.map(p => ({ ...p }))
+                    : this.playerPieces.map(p => ({ ...p }));
+
+                // Make the move
+                const capturedPiece = this.board[move.row]?.[move.col];
+                this.board[piece.row][piece.col] = null;
+                this.board[move.row][move.col] = piece;
+
+                const oldRow = piece.row, oldCol = piece.col;
+                piece.row = move.row;
+                piece.col = move.col;
+
+                // Remove captured piece from enemy list temporarily
+                if (capturedPiece) {
+                    if (kingOwner === 'player') {
+                        this.enemyPieces = this.enemyPieces.filter(p => p.id !== capturedPiece.id);
+                    } else {
+                        this.playerPieces = this.playerPieces.filter(p => p.id !== capturedPiece.id);
+                    }
+                }
+
+                // Check if still in check
+                const stillInCheck = this.isKingInCheck(kingOwner);
+
+                // Restore board state
+                this.board = originalBoard;
+                piece.row = oldRow;
+                piece.col = oldCol;
+                if (kingOwner === 'player') {
+                    this.playerPieces = originalPieces;
+                    this.enemyPieces = originalEnemyPieces;
+                } else {
+                    this.enemyPieces = originalPieces;
+                    this.playerPieces = originalEnemyPieces;
+                }
+
+                // If this move gets out of check, not checkmate
+                if (!stillInCheck) {
+                    return false;
+                }
+            }
+        }
+
+        // No move escapes check - it's checkmate!
+        return true;
     }
 
     // ============================================
