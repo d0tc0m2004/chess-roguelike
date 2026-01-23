@@ -12,20 +12,20 @@
     <!-- Loadout Screen -->
     <div class="loadout-screen" id="loadout-screen">
         <div class="loadout-container">
-            <h1 class="loadout-title">THE SPARTAN 300</h1>
-            <p class="loadout-subtitle">Choose your squad to face the enemy army</p>
+            <h1 class="loadout-title">CHESS ROGUELIKE</h1>
+            <p class="loadout-subtitle">Build your deck. Conquer the gauntlet.</p>
 
             <div class="loadout-army">
                 <div class="loadout-slot fixed">
                     <div class="slot-label">COMMANDER</div>
-                    <div class="slot-piece">♔</div>
+                    <div class="slot-piece">&#9812;</div>
                     <div class="slot-name">King</div>
-                    <div class="slot-desc">Must survive at all costs</div>
+                    <div class="slot-desc">Must survive</div>
                 </div>
 
                 <div class="loadout-slot selectable" data-slot="1">
                     <div class="slot-label">GUARD 1</div>
-                    <div class="slot-piece" id="slot1-piece">♕</div>
+                    <div class="slot-piece" id="slot1-piece">&#9813;</div>
                     <div class="slot-select">
                         <select id="slot1-select">
                             <option value="queen">Queen</option>
@@ -38,7 +38,7 @@
 
                 <div class="loadout-slot selectable" data-slot="2">
                     <div class="slot-label">GUARD 2</div>
-                    <div class="slot-piece" id="slot2-piece">♖</div>
+                    <div class="slot-piece" id="slot2-piece">&#9814;</div>
                     <div class="slot-select">
                         <select id="slot2-select">
                             <option value="rook" selected>Rook</option>
@@ -51,7 +51,7 @@
 
                 <div class="loadout-slot selectable" data-slot="3">
                     <div class="slot-label">GUARD 3</div>
-                    <div class="slot-piece" id="slot3-piece">♘</div>
+                    <div class="slot-piece" id="slot3-piece">&#9816;</div>
                     <div class="slot-select">
                         <select id="slot3-select">
                             <option value="knight" selected>Knight</option>
@@ -63,19 +63,65 @@
                 </div>
             </div>
 
-            <div class="loadout-enemy-preview">
-                <h3>ENEMY FORCES</h3>
-                <div class="enemy-preview-pieces">
-                    <span class="enemy-piece-preview">♜♞♝♛♚♝♞♜</span>
-                    <span class="enemy-piece-preview">♟♟♟♟♟♟♟♟</span>
+            <div class="starter-deck-preview">
+                <h3>STARTER DECK</h3>
+                <div class="starter-cards" id="starter-cards-preview">
+                    <!-- Filled by JS -->
                 </div>
-                <p class="enemy-count">16 pieces - Full Chess Army</p>
             </div>
 
-            <button id="start-battle-btn" class="start-battle-btn">START BATTLE</button>
+            <button id="start-run-btn" class="start-battle-btn">BEGIN RUN</button>
         </div>
     </div>
 
+    <!-- Pre-Battle Screen -->
+    <div class="pre-battle-screen" id="pre-battle-screen" style="display: none;">
+        <div class="pre-battle-container">
+            <div class="battle-header">
+                <span class="battle-count">BATTLE <span id="pre-battle-num">1</span>/10</span>
+            </div>
+
+            <h2 id="formation-name">THE PAWN WALL</h2>
+            <p id="formation-desc">A simple line of pawns. Good for learning.</p>
+
+            <div class="formation-info">
+                <span class="info-badge difficulty">DIFFICULTY: <span id="formation-diff">1</span>/10</span>
+                <span class="info-badge archetype">STYLE: <span id="formation-arch">PASSIVE</span></span>
+            </div>
+
+            <div id="formation-preview">
+                <!-- Formation pieces shown here -->
+            </div>
+
+            <button id="start-battle-btn" class="start-battle-btn">SELECT CARDS</button>
+        </div>
+    </div>
+
+    <!-- Card Selection Screen -->
+    <div class="card-select-screen" id="card-select-screen" style="display: none;">
+        <div class="card-select-container">
+            <h2>SELECT YOUR HAND</h2>
+            <p class="card-select-subtitle">Choose <span id="hand-size">5</span> cards for this battle</p>
+
+            <div class="selected-cards-area">
+                <h3>SELECTED (<span id="selected-count">0</span>/5)</h3>
+                <div class="selected-cards" id="selected-cards">
+                    <!-- Selected cards appear here -->
+                </div>
+            </div>
+
+            <div class="available-cards-area">
+                <h3>YOUR DECK</h3>
+                <div class="available-cards" id="available-cards">
+                    <!-- All deck cards shown here -->
+                </div>
+            </div>
+
+            <button id="confirm-cards-btn" class="start-battle-btn" disabled>FIGHT</button>
+        </div>
+    </div>
+
+    <!-- Main Game Container - Split Layout -->
     <div class="game-container" id="game-container" style="display: none;">
         <!-- LEFT: Chess Board -->
         <div class="board-column">
@@ -84,143 +130,156 @@
             </div>
         </div>
 
-        <!-- RIGHT: Sidebar Dashboard -->
+        <!-- RIGHT: Sidebar -->
         <div class="game-sidebar">
             <header class="game-header">
-                <h1>SPARTAN 300</h1>
+                <div class="run-progress">
+                    <span class="battle-indicator">BATTLE <span id="current-battle">1</span>/10</span>
+                </div>
                 <div class="battle-info">
-                    <span id="battle-number">4 vs 16</span>
-                    <span id="turn-indicator">Your Turn</span>
+                    <span id="turn-indicator">YOUR TURN</span>
+                    <button id="deck-btn" class="deck-btn">DECK</button>
                     <button id="help-btn" class="help-btn">?</button>
                 </div>
             </header>
 
-            <!-- Enemy Info -->
+            <!-- Enemy Info Panel -->
             <div class="enemy-info">
-                <h3>ENEMY ARMY</h3>
-                <span id="enemy-piece-count">16 pieces</span>
+                <h3 id="enemy-formation-name">ENEMY</h3>
+                <span id="enemy-piece-count">PIECES: 16</span>
             </div>
 
-            <!-- Enemy Intent Display -->
+            <!-- Enemy Intent -->
             <div class="enemy-intent" id="enemy-intent">
-                <span>Projected: </span>
-                <span id="intent-text">-</span>
+                <span>INTENT: </span>
+                <span id="intent-text">---</span>
             </div>
 
-            <!-- Player Info -->
+            <!-- Player Info Panel -->
             <div class="player-info">
                 <h3>YOUR ARMY</h3>
-                <span id="player-piece-count">4 pieces</span>
+                <span id="player-piece-count">PIECES: 4</span>
             </div>
 
-            <!-- Card Hand -->
-            <div class="card-hand" id="card-hand">
-                <!-- Cards will be inserted here by JS -->
-            </div>
-
-            <div class="card-instructions" id="card-instructions"></div>
-        </div>
-
-        <!-- Game Over Overlay -->
-        <div class="overlay" id="game-over-overlay">
-            <div class="overlay-content">
-                <h2 id="game-over-text">Victory!</h2>
-                <p id="game-over-subtext">You defeated the enemy army!</p>
-                <div class="game-over-buttons">
-                    <button id="restart-btn">Play Again</button>
-                    <button id="change-squad-btn" class="secondary-btn">Change Squad</button>
+            <!-- Card Section -->
+            <div class="card-section">
+                <div class="card-section-header">
+                    <span class="card-section-title">HAND</span>
+                    <span class="cards-remaining"><span id="cards-played">0</span>/3 PLAYED</span>
                 </div>
-            </div>
-        </div>
-
-        <!-- How To Play Overlay -->
-        <div class="overlay" id="help-overlay">
-            <div class="overlay-content help-content">
-                <button class="close-btn" id="close-help">&times;</button>
-                <h2>How To Play</h2>
-
-                <div class="help-section">
-                    <h3>Goal</h3>
-                    <p>Capture the enemy <span class="enemy-color">King</span> to win. Don't let them capture yours!</p>
+                <div class="card-hand" id="card-hand">
+                    <!-- Cards inserted by JS -->
                 </div>
-
-                <div class="help-section">
-                    <h3>The Odds Are Against You</h3>
-                    <p>You have a small army. The enemy has a full army. That's why you have <span
-                            class="highlight">CHEAT CARDS</span>.</p>
-                </div>
-
-                <div class="help-section">
-                    <h3>How To Move</h3>
-                    <ul>
-                        <li>Click one of your pieces (blue glow) to select it</li>
-                        <li>Green dots show where you can move</li>
-                        <li>Red squares show enemies you can capture</li>
-                        <li>Click a valid square to move there</li>
-                    </ul>
-                </div>
-
-                <div class="help-section">
-                    <h3>Chess Pieces</h3>
-                    <div class="piece-guide">
-                        <div class="piece-row"><span class="piece-symbol">♔</span> <strong>King</strong> - Moves 1
-                            square any direction. Lose him = Game Over!</div>
-                        <div class="piece-row"><span class="piece-symbol">♕</span> <strong>Queen</strong> - Moves any
-                            direction, any distance. Most powerful!</div>
-                        <div class="piece-row"><span class="piece-symbol">♖</span> <strong>Rook</strong> - Moves in
-                            straight lines (up/down/left/right)</div>
-                        <div class="piece-row"><span class="piece-symbol">♗</span> <strong>Bishop</strong> - Moves
-                            diagonally</div>
-                        <div class="piece-row"><span class="piece-symbol">♘</span> <strong>Knight</strong> - Moves in an
-                            "L" shape, can jump over pieces</div>
-                        <div class="piece-row"><span class="piece-symbol">♙</span> <strong>Pawn</strong> - Moves forward
-                            1 (or 2 from start), captures diagonally</div>
-                    </div>
-                </div>
-
-                <div class="help-section">
-                    <h3>Your TACTICAL Cards</h3>
-                    <p>You can play up to <strong>3 cards per battle</strong>. <span class="highlight">Playing a card
-                            ends your turn</span> - you can't move AND play a card in the same turn!</p>
-                    <div class="card-guide">
-                        <div class="card-row"><span class="card-name-guide">Divine Shield</span> - Your piece cannot be
-                            captured for 1 round</div>
-                        <div class="card-row"><span class="card-name-guide">Knight's Jump</span> - All your pieces can
-                            move like Knights this turn</div>
-                        <div class="card-row"><span class="card-name-guide">Snipe</span> - Your ranged pieces can
-                            capture through one obstacle</div>
-                        <div class="card-row"><span class="card-name-guide">Caltrops</span> - Place a lethal trap on an
-                            empty square (enemies die if they step on it)</div>
-                        <div class="card-row"><span class="card-name-guide">Shield Bash</span> - Push an adjacent enemy
-                            1 tile back; kills if they hit a wall or piece</div>
-                    </div>
-                </div>
-
-                <div class="help-section">
-                    <h3>Projected Move</h3>
-                    <p>The red highlighted square shows where the enemy <strong>is likely to move</strong>. However, the
-                        AI will <strong>re-evaluate</strong> after you move - it may change its mind to punish mistakes!
-                    </p>
-                </div>
-
-                <div class="help-section tips">
-                    <h3>Tips</h3>
-                    <ul>
-                        <li>The projected move is a forecast, not a promise - the AI adapts!</li>
-                        <li>Place Caltrops where enemies want to move - trap their plans!</li>
-                        <li>Diamond Form freezes your piece but makes it invulnerable</li>
-                        <li>Knight's Jump lets you escape surrounded positions</li>
-                        <li>Snipe through pawns to take out pieces behind them</li>
-                        <li>Shield Bash enemies against walls or into your traps!</li>
-                    </ul>
-                </div>
-
-                <button id="start-game-btn" class="start-btn">Got it, let's play!</button>
+                <div class="card-instructions" id="card-instructions"></div>
             </div>
         </div>
     </div>
 
-    <!-- Custom AI System (must load before game.js) -->
+    <!-- Card Reward Screen -->
+    <div class="overlay reward-overlay" id="reward-overlay" style="display: none;">
+        <div class="overlay-content reward-content">
+            <h2>VICTORY</h2>
+            <p class="reward-subtitle">Choose a card to add to your deck</p>
+
+            <div class="reward-cards" id="reward-cards">
+                <!-- 3 reward cards inserted by JS -->
+            </div>
+
+            <div class="skip-reward">
+                <button id="skip-reward-btn" class="secondary-btn">SKIP</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deck View Overlay -->
+    <div class="overlay deck-overlay" id="deck-overlay" style="display: none;">
+        <div class="overlay-content deck-content">
+            <button class="close-btn" id="close-deck">&times;</button>
+            <h2>YOUR DECK</h2>
+            <div class="deck-full-view" id="deck-full-view">
+                <!-- All cards in deck -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div class="overlay" id="game-over-overlay">
+        <div class="overlay-content">
+            <h2 id="game-over-text">VICTORY</h2>
+            <p id="game-over-subtext">You defeated the enemy army.</p>
+            <div class="game-over-buttons">
+                <button id="restart-btn">TRY AGAIN</button>
+                <button id="new-run-btn" class="secondary-btn">NEW RUN</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Run Complete Overlay -->
+    <div class="overlay" id="run-complete-overlay" style="display: none;">
+        <div class="overlay-content victory-content">
+            <h2>RUN COMPLETE</h2>
+            <p class="run-complete-subtitle">You conquered the gauntlet.</p>
+            <div class="run-stats" id="run-stats">
+                <!-- Stats filled by JS -->
+            </div>
+            <button id="new-run-from-complete-btn" class="start-battle-btn">NEW RUN</button>
+        </div>
+    </div>
+
+    <!-- How To Play Overlay -->
+    <div class="overlay" id="help-overlay">
+        <div class="overlay-content help-content">
+            <button class="close-btn" id="close-help">&times;</button>
+            <h2>HOW TO PLAY</h2>
+
+            <div class="help-section">
+                <h3>GOAL</h3>
+                <p>Complete 10 battles to win the run. Capture the enemy <span class="enemy-color">King</span> each battle.</p>
+            </div>
+
+            <div class="help-section">
+                <h3>ROGUELIKE ELEMENTS</h3>
+                <ul>
+                    <li>Start with 5 basic cards</li>
+                    <li>Win battles to earn new cards</li>
+                    <li>Build your deck as you progress</li>
+                    <li>Enemies get harder each battle</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>HOW TO MOVE</h3>
+                <ul>
+                    <li>Click one of your pieces to select it</li>
+                    <li>Red dots show where you can move</li>
+                    <li>Red borders show enemies you can capture</li>
+                    <li>Click a valid square to move there</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>CARDS</h3>
+                <p>You can play up to <span class="highlight">3 cards per battle</span>. Draw 5 cards from your deck each battle.</p>
+                <div class="rarity-guide">
+                    <span class="rarity-item common">COMMON</span>
+                    <span class="rarity-item uncommon">UNCOMMON</span>
+                    <span class="rarity-item rare">RARE</span>
+                    <span class="rarity-item legendary">LEGENDARY</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>ENEMY INTENT</h3>
+                <p>The red highlighted square shows where the enemy <span class="highlight">plans to move</span>. Use this to plan your strategy.</p>
+            </div>
+
+            <button id="start-game-btn" class="start-btn">GOT IT</button>
+        </div>
+    </div>
+
+    <!-- Game Systems (must load in order) -->
+    <script src="js/cards.js"></script>
+    <script src="js/formations.js"></script>
     <script src="js/ai-system.js"></script>
     <script src="game.js"></script>
 </body>

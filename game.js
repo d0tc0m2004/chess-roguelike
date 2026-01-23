@@ -1,10 +1,14 @@
-// Chess Roguelike - Prototype
+// Chess Roguelike - Full Roguelike Game Loop
+// Features: 10-battle runs, deck building, formations, card rewards
 
 // ============================================
 // CONSTANTS & CONFIG
 // ============================================
 
 const BOARD_ROWS = 8;
+const TOTAL_BATTLES = 10;
+const HAND_SIZE = 5;
+const MAX_CARDS_PER_BATTLE = 3;
 
 const PIECES = {
     KING: 'king',
@@ -24,40 +28,6 @@ const PIECE_SYMBOLS = {
     pawn: { player: '♙', enemy: '♟' }
 };
 
-const CARDS = {
-    divineShield: {
-        name: 'Diamond Form',
-        effect: 'Target piece becomes Invulnerable but Cannot Move for 1 round.',
-        rarity: 'rare',
-        action: 'selectPlayerPiece'
-    },
-    knightJump: {
-        name: "Knight's Jump",
-        effect: 'All your pieces can move like Knights this turn.',
-        rarity: 'uncommon',
-        action: 'instant'
-    },
-    snipe: {
-        name: 'Snipe',
-        effect: 'Ranged pieces can capture through one obstacle (Cannot target King).',
-        rarity: 'rare',
-        action: 'instant'
-    },
-    caltrops: {
-        name: 'Caltrops',
-        effect: 'Place a lethal trap on an empty square.',
-        rarity: 'uncommon',
-        action: 'selectEmpty'
-    },
-    shieldBash: {
-        name: 'Shield Bash',
-        effect: 'Push an adjacent enemy 1 tile back. Captures if they hit a wall.',
-        rarity: 'rare',
-        action: 'selectEnemy'
-    }
-};
-
-// Piece material values for AI evaluation
 const PIECE_VALUES = {
     king: 10000,
     queen: 900,
@@ -67,36 +37,13 @@ const PIECE_VALUES = {
     pawn: 100
 };
 
-// Position bonus tables for AI (knights prefer center, pawns prefer advancing)
-const POSITION_BONUS = {
-    knight: [
-        [-50,-40,-30,-30,-30,-30,-40,-50],
-        [-40,-20,  0,  0,  0,  0,-20,-40],
-        [-30,  0, 10, 15, 15, 10,  0,-30],
-        [-30,  5, 15, 20, 20, 15,  5,-30],
-        [-30,  0, 15, 20, 20, 15,  0,-30],
-        [-30,  5, 10, 15, 15, 10,  5,-30],
-        [-40,-20,  0,  5,  5,  0,-20,-40],
-        [-50,-40,-30,-30,-30,-30,-40,-50]
-    ],
-    pawn: [
-        [ 0,  0,  0,  0,  0,  0,  0,  0],
-        [50, 50, 50, 50, 50, 50, 50, 50],
-        [10, 10, 20, 30, 30, 20, 10, 10],
-        [ 5,  5, 10, 25, 25, 10,  5,  5],
-        [ 0,  0,  0, 20, 20,  0,  0,  0],
-        [ 5, -5,-10,  0,  0,-10, -5,  5],
-        [ 5, 10, 10,-20,-20, 10, 10,  5],
-        [ 0,  0,  0,  0,  0,  0,  0,  0]
-    ]
-};
-
 // ============================================
-// GAME STATE
+// GAME CLASS
 // ============================================
 
 class ChessRoguelike {
     constructor() {
+        // Board state
         this.board = [];
         this.playerPieces = [];
         this.enemyPieces = [];
@@ -105,126 +52,469 @@ class ChessRoguelike {
         this.isPlayerTurn = true;
         this.gameOver = false;
 
-        // Loadout system
-        this.playerLoadout = ['queen', 'rook', 'knight']; // Default loadout
-        this.gameStarted = false;
+        // Loadout
+        this.playerLoadout = ['queen', 'rook', 'knight'];
 
-        // Card system - tactical cards
-        this.hand = ['divineShield', 'knightJump', 'snipe', 'caltrops', 'shieldBash'];
+        // Run state
+        this.currentBattle = 1;
+        this.totalBattles = TOTAL_BATTLES;
+        this.runActive = false;
+
+        // Deck & Hand
+        this.deck = [];
+        this.hand = [];
         this.selectedCard = null;
         this.cardState = null;
         this.cardsPlayedThisBattle = 0;
-        this.maxCardsPerBattle = 3;
+        this.selectedBattleCards = []; // Cards selected for upcoming battle
+        this.maxBattleCards = HAND_SIZE; // Max cards player can select
+
+        // Current formation
+        this.currentFormation = null;
 
         // Status effects
-        this.frozenPieces = new Map(); // piece id -> turns remaining
-        this.traitorPieces = new Map(); // piece id -> turns remaining
-        this.invulnerablePieces = new Map(); // piece id -> turns remaining
+        this.frozenPieces = new Map();
+        this.traitorPieces = new Map();
+        this.invulnerablePieces = new Map();
+        this.shieldedPieces = new Map();
+        this.bracedPieces = new Map();
+        this.phantomPieces = new Map();
+        this.controlledEnemies = new Map();
+        this.traps = new Map();
+        this.decoys = new Set();
+        this.traitorMarked = new Set();
 
-        // Traps (Caltrops)
-        this.traps = new Map(); // "row,col" -> true
-
-        // Special turn modifiers
+        // Turn modifiers
         this.knightJumpActive = false;
         this.snipeActive = false;
+        this.rallyActive = false;
+        this.chainReactionActive = false;
+        this.loadedDiceActive = false;
+        this.checkmateDeniedActive = false;
+        this.zugzwangActive = false;
+        this.bluffActive = false;
+        this.parallelPlayActive = false;
+        this.showAllEnemyMoves = false;
 
-        // History for Time Warp
+        // Card state
+        this.dashPiece = null;
+        this.ghostWalkPiece = null;
+        this.ricochetPiece = null;
+        this.extraMoves = null;
+        this.kingQueenMoves = 0;
+        this.extendedIntentTurns = 0;
+        this.pocketedPiece = null;
+        this.lastPlayerMove = null;
+        this.movesThisTurn = 0;
+
+        // Tracking
+        this.capturedPlayerPieces = [];
+        this.capturedEnemyPieces = [];
         this.boardHistory = [];
 
-        // Enemy AI - Custom Priority-Based System
+        // AI
         this.enemyIntent = null;
         this.skipEnemyTurn = false;
-        this.aiDifficulty = 'MEDIUM'; // 'EASY', 'MEDIUM', 'HARD'
-        this.aiArchetype = 'HUNTER';  // 'SWARM', 'HUNTER', 'WALL', 'TACTICIAN', 'AGGRESSOR'
+        this.aiDifficulty = 'EASY';
+        this.aiArchetype = 'PASSIVE';
 
-        // Game analysis
-        this.moveCount = 0;
-        this.enemyMoveCount = 0;
-        this.piecesLost = 0;
-        this.piecesCaptures = 0;
-
-        this.initLoadout();
-    }
-
-    // ============================================
-    // AI SYSTEM HELPERS
-    // ============================================
-
-    getGameState() {
-        return {
-            board: this.board,
-            playerPieces: this.playerPieces,
-            enemyPieces: this.enemyPieces,
-            frozenPieces: this.frozenPieces,
-            traitorPieces: this.traitorPieces,
-            invulnerablePieces: this.invulnerablePieces,
-            traps: this.traps
+        // Stats
+        this.runStats = {
+            battlesWon: 0,
+            totalEnemiesKilled: 0,
+            totalCardsPlayed: 0,
+            piecesLost: 0
         };
+
+        this.init();
     }
 
-    getPlayerCards() {
-        return this.hand;
-    }
+    // ============================================
+    // INITIALIZATION
+    // ============================================
 
-    initLoadout() {
+    init() {
         this.bindLoadoutEvents();
         this.updateLoadoutDisplay();
+        this.renderStarterDeckPreview();
     }
 
     bindLoadoutEvents() {
-        // Piece selection dropdowns
-        const slot1 = document.getElementById('slot1-select');
-        const slot2 = document.getElementById('slot2-select');
-        const slot3 = document.getElementById('slot3-select');
+        // Piece selection
+        ['slot1', 'slot2', 'slot3'].forEach((slot, i) => {
+            const select = document.getElementById(`${slot}-select`);
+            if (select) {
+                select.addEventListener('change', (e) => {
+                    this.playerLoadout[i] = e.target.value;
+                    this.updateLoadoutDisplay();
+                });
+            }
+        });
 
-        const updateSlot = (slotNum, value) => {
-            this.playerLoadout[slotNum - 1] = value;
-            this.updateLoadoutDisplay();
-        };
+        // Start run button
+        const startRunBtn = document.getElementById('start-run-btn');
+        if (startRunBtn) {
+            startRunBtn.addEventListener('click', () => this.startNewRun());
+        }
 
-        slot1.addEventListener('change', (e) => updateSlot(1, e.target.value));
-        slot2.addEventListener('change', (e) => updateSlot(2, e.target.value));
-        slot3.addEventListener('change', (e) => updateSlot(3, e.target.value));
+        // Start battle button - now shows card selection
+        const startBattleBtn = document.getElementById('start-battle-btn');
+        if (startBattleBtn) {
+            startBattleBtn.addEventListener('click', () => this.showCardSelectScreen());
+        }
 
-        // Start battle button
-        document.getElementById('start-battle-btn').addEventListener('click', () => {
-            this.startGame();
+        // Confirm cards button
+        const confirmCardsBtn = document.getElementById('confirm-cards-btn');
+        if (confirmCardsBtn) {
+            confirmCardsBtn.addEventListener('click', () => this.confirmCardSelection());
+        }
+
+        // Help buttons
+        document.getElementById('help-btn')?.addEventListener('click', () => {
+            document.getElementById('help-overlay').classList.add('active');
+        });
+        document.getElementById('close-help')?.addEventListener('click', () => {
+            document.getElementById('help-overlay').classList.remove('active');
+        });
+        document.getElementById('start-game-btn')?.addEventListener('click', () => {
+            document.getElementById('help-overlay').classList.remove('active');
+        });
+
+        // Deck view
+        document.getElementById('deck-btn')?.addEventListener('click', () => this.showDeckView());
+        document.getElementById('close-deck')?.addEventListener('click', () => this.hideDeckView());
+
+        // Game over buttons
+        document.getElementById('restart-btn')?.addEventListener('click', () => this.retryBattle());
+        document.getElementById('new-run-btn')?.addEventListener('click', () => this.returnToLoadout());
+        document.getElementById('new-run-from-complete-btn')?.addEventListener('click', () => this.returnToLoadout());
+
+        // Card reward
+        document.getElementById('skip-reward-btn')?.addEventListener('click', () => this.skipCardReward());
+
+        // Help overlay close on outside click
+        document.getElementById('help-overlay')?.addEventListener('click', (e) => {
+            if (e.target.id === 'help-overlay') {
+                document.getElementById('help-overlay').classList.remove('active');
+            }
+        });
+
+        // Deck overlay close on outside click
+        document.getElementById('deck-overlay')?.addEventListener('click', (e) => {
+            if (e.target.id === 'deck-overlay') {
+                this.hideDeckView();
+            }
         });
     }
 
     updateLoadoutDisplay() {
-        const pieceSymbols = {
-            queen: '♕',
-            rook: '♖',
-            bishop: '♗',
-            knight: '♘'
+        const symbols = { queen: '♕', rook: '♖', bishop: '♗', knight: '♘' };
+        this.playerLoadout.forEach((piece, i) => {
+            const el = document.getElementById(`slot${i + 1}-piece`);
+            if (el) el.textContent = symbols[piece];
+        });
+    }
+
+    renderStarterDeckPreview() {
+        const container = document.getElementById('starter-cards-preview');
+        if (!container || typeof STARTER_DECK === 'undefined') return;
+
+        container.innerHTML = '';
+        STARTER_DECK.forEach(cardId => {
+            const card = CARD_DEFINITIONS[cardId];
+            if (!card) return;
+
+            const cardEl = document.createElement('div');
+            cardEl.className = 'mini-card';
+            cardEl.innerHTML = `<span class="mini-card-name">${card.name}</span>`;
+            container.appendChild(cardEl);
+        });
+    }
+
+    // ============================================
+    // RUN MANAGEMENT
+    // ============================================
+
+    startNewRun() {
+        // Initialize run state
+        this.currentBattle = 1;
+        this.runActive = true;
+        this.deck = [...STARTER_DECK];
+        this.runStats = {
+            battlesWon: 0,
+            totalEnemiesKilled: 0,
+            totalCardsPlayed: 0,
+            piecesLost: 0
         };
 
-        document.getElementById('slot1-piece').textContent = pieceSymbols[this.playerLoadout[0]];
-        document.getElementById('slot2-piece').textContent = pieceSymbols[this.playerLoadout[1]];
-        document.getElementById('slot3-piece').textContent = pieceSymbols[this.playerLoadout[2]];
+        // Hide loadout, show pre-battle
+        document.getElementById('loadout-screen').style.display = 'none';
+        this.showPreBattleScreen();
     }
 
-    startGame() {
-        // Hide loadout, show game
-        document.getElementById('loadout-screen').style.display = 'none';
+    showPreBattleScreen() {
+        // Get formation for this battle
+        const battleInfo = this.getBattleInfo(this.currentBattle);
+        this.currentFormation = battleInfo.formation;
+        this.aiDifficulty = battleInfo.difficulty;
+        this.aiArchetype = this.currentFormation.archetype;
+
+        // Update pre-battle UI
+        document.getElementById('pre-battle-num').textContent = this.currentBattle;
+        document.getElementById('formation-name').textContent = this.currentFormation.name;
+        document.getElementById('formation-desc').textContent = this.currentFormation.description;
+        document.getElementById('formation-diff').textContent = this.currentFormation.difficulty;
+        document.getElementById('formation-arch').textContent = this.aiArchetype;
+
+        // Show formation preview
+        this.renderFormationPreview();
+
+        // Show deck preview
+        this.renderDeckPreview();
+
+        document.getElementById('pre-battle-screen').style.display = 'flex';
+    }
+
+    // ============================================
+    // CARD SELECTION SCREEN
+    // ============================================
+
+    showCardSelectScreen() {
+        document.getElementById('pre-battle-screen').style.display = 'none';
+        document.getElementById('card-select-screen').style.display = 'flex';
+
+        // Calculate max cards to select (can't select more than deck has)
+        this.maxBattleCards = Math.min(HAND_SIZE, this.deck.length);
+
+        // Update hand size display
+        const handSizeEl = document.getElementById('hand-size');
+        if (handSizeEl) handSizeEl.textContent = this.maxBattleCards;
+
+        // Reset selection
+        this.selectedBattleCards = [];
+        this.updateCardSelectUI();
+    }
+
+    updateCardSelectUI() {
+        const availableContainer = document.getElementById('available-cards');
+        const selectedContainer = document.getElementById('selected-cards');
+        const countEl = document.getElementById('selected-count');
+        const confirmBtn = document.getElementById('confirm-cards-btn');
+
+        if (!availableContainer || !selectedContainer) return;
+
+        // Update count
+        if (countEl) countEl.textContent = this.selectedBattleCards.length;
+
+        // Update the "/5" part in the header
+        const headerEl = document.querySelector('.selected-cards-area h3');
+        if (headerEl) headerEl.textContent = `SELECTED (${this.selectedBattleCards.length}/${this.maxBattleCards})`;
+
+        // Enable/disable confirm button
+        if (confirmBtn) {
+            confirmBtn.disabled = this.selectedBattleCards.length !== this.maxBattleCards;
+        }
+
+        // Render available cards (cards in deck not yet selected)
+        availableContainer.innerHTML = '';
+        this.deck.forEach(cardId => {
+            if (this.selectedBattleCards.includes(cardId)) return;
+
+            const card = CARD_DEFINITIONS[cardId];
+            if (!card) return;
+
+            const cardEl = document.createElement('div');
+            cardEl.className = `select-card ${card.rarity.toLowerCase()}`;
+            cardEl.dataset.card = cardId;
+
+            cardEl.innerHTML = `
+                <div class="select-card-name">${card.name}</div>
+                <div class="select-card-desc">${card.description}</div>
+                <div class="select-card-rarity ${card.rarity.toLowerCase()}"></div>
+            `;
+
+            cardEl.addEventListener('click', () => this.selectCardForBattle(cardId));
+            availableContainer.appendChild(cardEl);
+        });
+
+        // Render selected cards
+        selectedContainer.innerHTML = '';
+        this.selectedBattleCards.forEach(cardId => {
+            const card = CARD_DEFINITIONS[cardId];
+            if (!card) return;
+
+            const cardEl = document.createElement('div');
+            cardEl.className = `select-card selected ${card.rarity.toLowerCase()}`;
+            cardEl.dataset.card = cardId;
+
+            cardEl.innerHTML = `
+                <div class="select-card-name">${card.name}</div>
+                <div class="select-card-desc">${card.description}</div>
+                <div class="select-card-rarity ${card.rarity.toLowerCase()}"></div>
+            `;
+
+            cardEl.addEventListener('click', () => this.deselectCardForBattle(cardId));
+            selectedContainer.appendChild(cardEl);
+        });
+    }
+
+    selectCardForBattle(cardId) {
+        if (this.selectedBattleCards.length >= this.maxBattleCards) return;
+        if (this.selectedBattleCards.includes(cardId)) return;
+
+        this.selectedBattleCards.push(cardId);
+        this.updateCardSelectUI();
+    }
+
+    deselectCardForBattle(cardId) {
+        this.selectedBattleCards = this.selectedBattleCards.filter(id => id !== cardId);
+        this.updateCardSelectUI();
+    }
+
+    confirmCardSelection() {
+        if (this.selectedBattleCards.length !== this.maxBattleCards) return;
+
+        // Set hand to selected cards
+        this.hand = [...this.selectedBattleCards];
+
+        // Hide card select, start battle
+        document.getElementById('card-select-screen').style.display = 'none';
+        this.startBattleWithSelectedCards();
+    }
+
+    async startBattleWithSelectedCards() {
         document.getElementById('game-container').style.display = 'flex';
 
-        this.gameStarted = true;
-        this.init();
-    }
-
-    init() {
+        // Hand is already set from card selection
+        // Setup the battle
         this.createBoard();
-        this.setupBattle();
-        this.saveBoardState(); // Save initial state for Time Warp
+        this.setupPlayerPieces();
+        this.setupEnemyFormation();
+        this.resetBattleState();
+
+        this.saveBoardState();
         this.render();
-        this.bindEvents();
+        this.bindBattleEvents();
+
+        // Calculate enemy intent asynchronously (Stockfish)
+        await this.calculateEnemyIntent();
+    }
+
+    getBattleInfo(battleNum) {
+        // Determine formation pool based on battle number
+        let pool, difficulty;
+
+        if (battleNum <= 2) {
+            pool = 'TUTORIAL';
+            difficulty = 'EASY';
+        } else if (battleNum <= 4) {
+            pool = 'EASY';
+            difficulty = 'EASY';
+        } else if (battleNum <= 6) {
+            pool = 'MEDIUM';
+            difficulty = 'MEDIUM';
+        } else if (battleNum <= 8) {
+            pool = 'HARD';
+            difficulty = 'MEDIUM';
+        } else {
+            pool = 'EXPERT';
+            difficulty = 'HARD';
+        }
+
+        // Battle 10 is always a boss
+        if (battleNum === 10) {
+            pool = 'BOSS';
+            difficulty = 'HARD';
+        }
+
+        // Get random formation from pool
+        const formationIds = FORMATION_POOLS[pool] || FORMATION_POOLS.MEDIUM;
+        const randomId = formationIds[Math.floor(Math.random() * formationIds.length)];
+        const formation = FORMATIONS[randomId];
+
+        return { formation, difficulty };
+    }
+
+    renderFormationPreview() {
+        const container = document.getElementById('formation-preview');
+        if (!container || !this.currentFormation) return;
+
+        // Create mini board preview
+        container.innerHTML = '';
+        const miniBoard = document.createElement('div');
+        miniBoard.className = 'mini-board';
+
+        // Only show top 4 rows for preview
+        for (let row = 0; row < 4; row++) {
+            for (let col = 0; col < 8; col++) {
+                const cell = document.createElement('div');
+                cell.className = `mini-cell ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+
+                // Check if there's a piece here
+                const piece = this.currentFormation.pieces.find(p => p.row === row && p.col === col);
+                if (piece) {
+                    const pieceEl = document.createElement('span');
+                    pieceEl.className = 'mini-piece enemy';
+                    pieceEl.textContent = PIECE_SYMBOLS[piece.type].enemy;
+                    cell.appendChild(pieceEl);
+                }
+
+                miniBoard.appendChild(cell);
+            }
+        }
+
+        container.appendChild(miniBoard);
+    }
+
+    renderDeckPreview() {
+        const container = document.getElementById('deck-preview');
+        const countEl = document.getElementById('deck-count');
+        if (!container) return;
+
+        if (countEl) countEl.textContent = this.deck.length;
+
+        container.innerHTML = '';
+        this.deck.forEach(cardId => {
+            const card = CARD_DEFINITIONS[cardId];
+            if (!card) return;
+
+            const cardEl = document.createElement('div');
+            cardEl.className = `mini-card ${card.rarity.toLowerCase()}`;
+            cardEl.innerHTML = `<span class="mini-card-name">${card.name}</span>`;
+            container.appendChild(cardEl);
+        });
     }
 
     // ============================================
-    // BOARD SETUP
+    // BATTLE MANAGEMENT
     // ============================================
+
+    async startBattle() {
+        document.getElementById('pre-battle-screen').style.display = 'none';
+        document.getElementById('game-container').style.display = 'flex';
+
+        // Draw hand from deck
+        this.drawHand();
+
+        // Setup the battle
+        this.createBoard();
+        this.setupPlayerPieces();
+        this.setupEnemyFormation();
+        this.resetBattleState();
+
+        this.saveBoardState();
+        this.render();
+        this.bindBattleEvents();
+
+        // Calculate enemy intent asynchronously (Stockfish)
+        await this.calculateEnemyIntent();
+    }
+
+    drawHand() {
+        // Shuffle deck and draw HAND_SIZE cards
+        const shuffled = [...this.deck].sort(() => Math.random() - 0.5);
+        this.hand = shuffled.slice(0, Math.min(HAND_SIZE, shuffled.length));
+    }
 
     createBoard() {
         this.board = [];
@@ -236,52 +526,40 @@ class ChessRoguelike {
         }
     }
 
-    setupBattle() {
-        // Clear previous
+    setupPlayerPieces() {
         this.playerPieces = [];
-        this.enemyPieces = [];
-        this.frozenPieces.clear();
-        this.traitorPieces.clear();
-        this.invulnerablePieces.clear();
-        this.traps.clear();
-        this.boardHistory = [];
-        this.moveCount = 0;
-        this.enemyMoveCount = 0;
-        this.piecesLost = 0;
-        this.piecesCaptures = 0;
 
-        // === PLAYER ARMY (4 pieces) ===
-        // King at e1 (row 7, col 4) - bottom row center (standard 8x8 board)
+        // King at e1
         this.placePiece(7, 4, PIECES.KING, 'player');
 
-        // 3 chosen pieces in guard formation around the king
-        // Position: d1 (7,3), f1 (7,5), e2 (6,4)
-        this.placePiece(7, 3, this.playerLoadout[0], 'player'); // Left of king
-        this.placePiece(7, 5, this.playerLoadout[1], 'player'); // Right of king
-        this.placePiece(6, 4, this.playerLoadout[2], 'player'); // In front of king
+        // 3 chosen pieces
+        this.placePiece(7, 3, this.playerLoadout[0], 'player');
+        this.placePiece(7, 5, this.playerLoadout[1], 'player');
+        this.placePiece(6, 4, this.playerLoadout[2], 'player');
+    }
 
-        // === ENEMY ARMY (16 pieces - Full Chess Army) ===
-        // Back row: R N B Q K B N R
-        this.placePiece(0, 0, PIECES.ROOK, 'enemy');
-        this.placePiece(0, 1, PIECES.KNIGHT, 'enemy');
-        this.placePiece(0, 2, PIECES.BISHOP, 'enemy');
-        this.placePiece(0, 3, PIECES.QUEEN, 'enemy');
-        this.placePiece(0, 4, PIECES.KING, 'enemy');
-        this.placePiece(0, 5, PIECES.BISHOP, 'enemy');
-        this.placePiece(0, 6, PIECES.KNIGHT, 'enemy');
-        this.placePiece(0, 7, PIECES.ROOK, 'enemy');
+    setupEnemyFormation() {
+        this.enemyPieces = [];
 
-        // Pawn row: 8 pawns
-        for (let col = 0; col < 8; col++) {
-            this.placePiece(1, col, PIECES.PAWN, 'enemy');
+        if (!this.currentFormation) return;
+
+        for (const pieceData of this.currentFormation.pieces) {
+            this.placePiece(pieceData.row, pieceData.col, pieceData.type, 'enemy');
         }
 
-        // Calculate initial enemy intent
-        this.calculateEnemyIntent();
+        // Update UI with formation name
+        const nameEl = document.getElementById('enemy-formation-name');
+        if (nameEl) nameEl.textContent = this.currentFormation.name;
     }
 
     placePiece(row, col, type, owner) {
-        const piece = { type, owner, row, col, id: `${owner}-${type}-${Date.now()}-${Math.random()}` };
+        const piece = {
+            type,
+            owner,
+            row,
+            col,
+            id: `${owner}-${type}-${Date.now()}-${Math.random()}`
+        };
         this.board[row][col] = piece;
         if (owner === 'player') {
             this.playerPieces.push(piece);
@@ -291,70 +569,282 @@ class ChessRoguelike {
         return piece;
     }
 
+    resetBattleState() {
+        this.selectedPiece = null;
+        this.validMoves = [];
+        this.isPlayerTurn = true;
+        this.gameOver = false;
+        this.selectedCard = null;
+        this.cardState = null;
+        this.cardsPlayedThisBattle = 0;
+
+        // Clear status effects
+        this.frozenPieces.clear();
+        this.traitorPieces.clear();
+        this.invulnerablePieces.clear();
+        this.shieldedPieces.clear();
+        this.bracedPieces.clear();
+        this.phantomPieces.clear();
+        this.controlledEnemies.clear();
+        this.traps.clear();
+        this.decoys.clear();
+        this.traitorMarked.clear();
+
+        // Reset modifiers
+        this.knightJumpActive = false;
+        this.snipeActive = false;
+        this.rallyActive = false;
+        this.chainReactionActive = false;
+        this.loadedDiceActive = false;
+        this.checkmateDeniedActive = false;
+        this.zugzwangActive = false;
+        this.bluffActive = false;
+        this.parallelPlayActive = false;
+        this.showAllEnemyMoves = false;
+
+        this.dashPiece = null;
+        this.ghostWalkPiece = null;
+        this.ricochetPiece = null;
+        this.extraMoves = null;
+        this.kingQueenMoves = 0;
+        this.extendedIntentTurns = 0;
+        this.pocketedPiece = null;
+        this.lastPlayerMove = null;
+        this.movesThisTurn = 0;
+
+        this.capturedPlayerPieces = [];
+        this.capturedEnemyPieces = [];
+        this.boardHistory = [];
+        this.skipEnemyTurn = false;
+        this.enemyIntent = null;
+    }
+
+    bindBattleEvents() {
+        const board = document.getElementById('board');
+        const cardHand = document.getElementById('card-hand');
+
+        // Remove old listeners by cloning
+        const newBoard = board.cloneNode(true);
+        board.parentNode.replaceChild(newBoard, board);
+
+        const newCardHand = cardHand.cloneNode(true);
+        cardHand.parentNode.replaceChild(newCardHand, cardHand);
+
+        // Board clicks
+        document.getElementById('board').addEventListener('click', (e) => {
+            if (this.gameOver) return;
+
+            const cell = e.target.closest('.cell');
+            if (!cell) return;
+
+            const row = parseInt(cell.dataset.row);
+            const col = parseInt(cell.dataset.col);
+            this.handleCellClick(row, col);
+        });
+
+        // Card clicks
+        document.getElementById('card-hand').addEventListener('click', (e) => {
+            if (this.gameOver || !this.isPlayerTurn) return;
+
+            const card = e.target.closest('.card');
+            if (!card || card.classList.contains('disabled')) return;
+
+            this.handleCardClick(card.dataset.card);
+        });
+    }
+
     // ============================================
-    // BOARD HISTORY (for Time Warp)
+    // VICTORY & REWARDS
     // ============================================
 
-    saveBoardState() {
-        const state = {
-            board: this.board.map(row => row.map(cell => cell ? { ...cell } : null)),
-            playerPieces: this.playerPieces.map(p => ({ ...p })),
-            enemyPieces: this.enemyPieces.map(p => ({ ...p })),
-            frozenPieces: new Map(this.frozenPieces),
-            traitorPieces: new Map(this.traitorPieces),
-            invulnerablePieces: new Map(this.invulnerablePieces),
-            traps: new Map(this.traps),
-            cardsPlayedThisBattle: this.cardsPlayedThisBattle
-        };
-        this.boardHistory.push(state);
+    onBattleVictory() {
+        this.gameOver = true;
+        this.runStats.battlesWon++;
+        this.runStats.totalEnemiesKilled += this.capturedEnemyPieces.length;
+        this.runStats.totalCardsPlayed += this.cardsPlayedThisBattle;
 
-        // Keep only last 5 states to prevent memory issues
-        if (this.boardHistory.length > 5) {
-            this.boardHistory.shift();
+        if (this.currentBattle >= this.totalBattles) {
+            // Run complete!
+            this.showRunComplete();
+        } else {
+            // Show card reward
+            this.showCardReward();
         }
     }
 
-    restoreBoardState() {
-        if (this.boardHistory.length < 2) {
-            this.showCardInstructions('No previous state to restore!');
-            setTimeout(() => this.clearCardInstructions(), 1500);
-            return false;
+    showCardReward() {
+        const container = document.getElementById('reward-cards');
+        if (!container) return;
+
+        // Generate 3 reward cards based on battle difficulty
+        const rewardPool = this.getRewardPool();
+        const rewards = this.getRandomCardsFromPool(rewardPool, 3);
+
+        container.innerHTML = '';
+        rewards.forEach(cardId => {
+            const card = CARD_DEFINITIONS[cardId];
+            if (!card) return;
+
+            const cardEl = document.createElement('div');
+            cardEl.className = `reward-card ${card.rarity.toLowerCase()}`;
+            cardEl.dataset.card = cardId;
+
+            cardEl.innerHTML = `
+                <div class="reward-card-name">${card.name}</div>
+                <div class="reward-card-desc">${card.description}</div>
+                <div class="reward-card-rarity ${card.rarity.toLowerCase()}">${card.isBurn ? 'BURN' : ''}</div>
+            `;
+
+            cardEl.addEventListener('click', () => this.selectCardReward(cardId));
+            container.appendChild(cardEl);
+        });
+
+        document.getElementById('reward-overlay').style.display = 'flex';
+    }
+
+    getRewardPool() {
+        // Better rewards as battles progress
+        if (this.currentBattle >= 8) {
+            return [...CARD_POOLS.RARE, ...CARD_POOLS.LEGENDARY];
+        } else if (this.currentBattle >= 5) {
+            return [...CARD_POOLS.UNCOMMON, ...CARD_POOLS.RARE];
+        } else if (this.currentBattle >= 3) {
+            return [...CARD_POOLS.COMMON, ...CARD_POOLS.UNCOMMON];
+        }
+        return [...CARD_POOLS.COMMON];
+    }
+
+    getRandomCardsFromPool(pool, count) {
+        const shuffled = [...pool].sort(() => Math.random() - 0.5);
+        // Filter out cards already in deck
+        const available = shuffled.filter(id => !this.deck.includes(id));
+        return available.slice(0, count);
+    }
+
+    selectCardReward(cardId) {
+        // Add card to deck
+        this.deck.push(cardId);
+
+        const card = CARD_DEFINITIONS[cardId];
+        console.log(`Added ${card.name} to deck!`);
+
+        this.hideCardReward();
+        this.proceedToNextBattle();
+    }
+
+    skipCardReward() {
+        this.hideCardReward();
+        this.proceedToNextBattle();
+    }
+
+    hideCardReward() {
+        document.getElementById('reward-overlay').style.display = 'none';
+    }
+
+    proceedToNextBattle() {
+        this.currentBattle++;
+        document.getElementById('game-container').style.display = 'none';
+        this.showPreBattleScreen();
+    }
+
+    showRunComplete() {
+        const statsEl = document.getElementById('run-stats');
+        if (statsEl) {
+            statsEl.innerHTML = `
+                <div class="stat-row">Battles Won: ${this.runStats.battlesWon}/${this.totalBattles}</div>
+                <div class="stat-row">Enemies Defeated: ${this.runStats.totalEnemiesKilled}</div>
+                <div class="stat-row">Cards Played: ${this.runStats.totalCardsPlayed}</div>
+                <div class="stat-row">Final Deck Size: ${this.deck.length}</div>
+            `;
         }
 
-        // Pop current state, then pop previous state to restore
-        this.boardHistory.pop();
-        const state = this.boardHistory.pop();
+        document.getElementById('game-container').style.display = 'none';
+        document.getElementById('run-complete-overlay').style.display = 'flex';
+    }
 
-        // Restore board
-        this.board = state.board.map(row => row.map(cell => cell ? { ...cell } : null));
+    // ============================================
+    // DEFEAT
+    // ============================================
 
-        // Restore pieces with proper references
-        this.playerPieces = [];
-        this.enemyPieces = [];
-        for (let row = 0; row < BOARD_ROWS; row++) {
-            for (let col = 0; col < 8; col++) {
-                const piece = this.board[row][col];
-                if (piece) {
-                    if (piece.owner === 'player') {
-                        this.playerPieces.push(piece);
-                    } else {
-                        this.enemyPieces.push(piece);
-                    }
-                }
-            }
-        }
+    onBattleDefeat() {
+        this.gameOver = true;
 
-        // Restore status effects
-        this.frozenPieces = new Map(state.frozenPieces);
-        this.traitorPieces = new Map(state.traitorPieces);
-        this.invulnerablePieces = new Map(state.invulnerablePieces);
-        this.traps = new Map(state.traps);
-        this.cardsPlayedThisBattle = state.cardsPlayedThisBattle;
+        const overlay = document.getElementById('game-over-overlay');
+        const text = document.getElementById('game-over-text');
+        const subtext = document.getElementById('game-over-subtext');
 
-        // Save the restored state as current
-        this.saveBoardState();
+        text.textContent = this.getDefeatTitle();
+        subtext.innerHTML = `
+            Battle ${this.currentBattle}/${this.totalBattles}<br>
+            Your King has fallen.<br><br>
+            Enemies remaining: ${this.enemyPieces.length}
+        `;
 
-        return true;
+        overlay.classList.add('active');
+    }
+
+    getDefeatTitle() {
+        const remaining = this.enemyPieces.length;
+        const total = this.currentFormation?.pieces?.length || 16;
+
+        if (remaining >= total * 0.8) return 'CRUSHED';
+        if (remaining >= total * 0.5) return 'OVERWHELMED';
+        if (remaining >= total * 0.3) return 'DEFEAT';
+        return 'SO CLOSE...';
+    }
+
+    retryBattle() {
+        document.getElementById('game-over-overlay').classList.remove('active');
+        document.getElementById('game-container').style.display = 'none';
+        this.showCardSelectScreen();
+    }
+
+    returnToLoadout() {
+        document.getElementById('game-over-overlay').classList.remove('active');
+        document.getElementById('run-complete-overlay').style.display = 'none';
+        document.getElementById('game-container').style.display = 'none';
+        document.getElementById('pre-battle-screen').style.display = 'none';
+        document.getElementById('loadout-screen').style.display = 'flex';
+        this.runActive = false;
+    }
+
+    // ============================================
+    // DECK VIEW
+    // ============================================
+
+    showDeckView() {
+        const container = document.getElementById('deck-full-view');
+        if (!container) return;
+
+        container.innerHTML = '';
+
+        // Sort by rarity
+        const rarityOrder = { COMMON: 0, UNCOMMON: 1, RARE: 2, LEGENDARY: 3 };
+        const sorted = [...this.deck].sort((a, b) => {
+            const cardA = CARD_DEFINITIONS[a];
+            const cardB = CARD_DEFINITIONS[b];
+            return (rarityOrder[cardA?.rarity] || 0) - (rarityOrder[cardB?.rarity] || 0);
+        });
+
+        sorted.forEach(cardId => {
+            const card = CARD_DEFINITIONS[cardId];
+            if (!card) return;
+
+            const cardEl = document.createElement('div');
+            cardEl.className = `deck-card ${card.rarity.toLowerCase()}`;
+            cardEl.innerHTML = `
+                <div class="deck-card-name">${card.name}</div>
+                <div class="deck-card-desc">${card.description}</div>
+                <div class="deck-card-rarity ${card.rarity.toLowerCase()}"></div>
+            `;
+            container.appendChild(cardEl);
+        });
+
+        document.getElementById('deck-overlay').style.display = 'flex';
+    }
+
+    hideDeckView() {
+        document.getElementById('deck-overlay').style.display = 'none';
     }
 
     // ============================================
@@ -379,25 +869,14 @@ class ChessRoguelike {
                 cell.dataset.row = row;
                 cell.dataset.col = col;
 
-                // Add tile label
-                const label = document.createElement('span');
-                label.className = 'cell-label';
-                label.textContent = this.toChessNotation(row, col);
-                cell.appendChild(label);
-
                 const piece = this.board[row][col];
                 if (piece) {
                     const pieceEl = document.createElement('span');
                     pieceEl.className = `piece ${piece.owner}`;
                     pieceEl.textContent = PIECE_SYMBOLS[piece.type][piece.owner];
 
-                    // Status effect indicators
-                    if (this.frozenPieces.has(piece.id)) {
-                        pieceEl.classList.add('frozen');
-                    }
-                    if (this.traitorPieces.has(piece.id)) {
-                        pieceEl.classList.add('traitor');
-                    }
+                    // Status indicators
+                    if (this.frozenPieces.has(piece.id)) pieceEl.classList.add('frozen');
                     if (this.invulnerablePieces.has(piece.id)) {
                         pieceEl.classList.add('diamond-form');
                         cell.classList.add('diamond-highlight');
@@ -405,17 +884,12 @@ class ChessRoguelike {
                     if (this.knightJumpActive && piece.owner === 'player') {
                         pieceEl.classList.add('knight-jump-active');
                     }
-                    if (this.snipeActive && piece.owner === 'player' &&
-                        (piece.type === PIECES.ROOK || piece.type === PIECES.BISHOP || piece.type === PIECES.QUEEN)) {
-                        pieceEl.classList.add('snipe-active');
-                    }
 
                     cell.appendChild(pieceEl);
                 }
 
-                // Render traps (Caltrops)
-                const trapKey = `${row},${col}`;
-                if (this.traps.has(trapKey)) {
+                // Traps
+                if (this.traps.has(`${row},${col}`)) {
                     const trapEl = document.createElement('span');
                     trapEl.className = 'trap';
                     trapEl.textContent = '✕';
@@ -423,29 +897,23 @@ class ChessRoguelike {
                     cell.classList.add('has-trap');
                 }
 
-                // Selected piece highlight
-                if (this.selectedPiece && 
-                    this.selectedPiece.row === row && 
-                    this.selectedPiece.col === col) {
+                // Selection
+                if (this.selectedPiece?.row === row && this.selectedPiece?.col === col) {
                     cell.classList.add('selected');
                 }
 
-                // Valid moves highlight
+                // Valid moves
                 const validMove = this.validMoves.find(m => m.row === row && m.col === col);
                 if (validMove) {
-                    if (this.board[row][col] && this.board[row][col].owner === 'enemy') {
-                        if (validMove.piercing) {
-                            cell.classList.add('piercing-capture');
-                        } else {
-                            cell.classList.add('valid-capture');
-                        }
+                    if (this.board[row][col]?.owner === 'enemy') {
+                        cell.classList.add(validMove.piercing ? 'piercing-capture' : 'valid-capture');
                     } else {
                         cell.classList.add('valid-move');
                     }
                 }
 
-                // Enemy intent highlight
-                if (this.enemyIntent && this.enemyIntent.to.row === row && this.enemyIntent.to.col === col) {
+                // Enemy intent
+                if (this.enemyIntent?.to.row === row && this.enemyIntent?.to.col === col) {
                     cell.classList.add('enemy-intent');
                 }
 
@@ -459,23 +927,23 @@ class ChessRoguelike {
         handEl.innerHTML = '';
 
         this.hand.forEach(cardId => {
-            const card = CARDS[cardId];
+            const card = CARD_DEFINITIONS[cardId];
+            if (!card) return;
+
             const cardEl = document.createElement('div');
             cardEl.className = 'card';
             cardEl.dataset.card = cardId;
-            
-            if (this.selectedCard === cardId) {
-                cardEl.classList.add('selected');
-            }
-            
-            if (this.cardsPlayedThisBattle >= this.maxCardsPerBattle || !this.isPlayerTurn) {
+
+            if (this.selectedCard === cardId) cardEl.classList.add('selected');
+            if (this.cardsPlayedThisBattle >= MAX_CARDS_PER_BATTLE || !this.isPlayerTurn) {
                 cardEl.classList.add('disabled');
             }
 
+            const rarityClass = card.rarity.toLowerCase();
             cardEl.innerHTML = `
                 <div class="card-name">${card.name}</div>
-                <div class="card-effect">${card.effect}</div>
-                <div class="card-rarity ${card.rarity}">${card.rarity}</div>
+                <div class="card-effect">${card.description}</div>
+                <div class="card-rarity ${rarityClass}"></div>
             `;
 
             handEl.appendChild(cardEl);
@@ -483,119 +951,58 @@ class ChessRoguelike {
     }
 
     renderInfo() {
-        document.getElementById('player-piece-count').textContent = `${this.playerPieces.length} pieces`;
-        document.getElementById('enemy-piece-count').textContent = `${this.enemyPieces.length} pieces`;
-        document.getElementById('battle-number').textContent = `${this.playerPieces.length} vs ${this.enemyPieces.length}`;
+        const battleEl = document.getElementById('current-battle');
+        if (battleEl) battleEl.textContent = this.currentBattle;
+
+        const playerCount = document.getElementById('player-piece-count');
+        if (playerCount) playerCount.textContent = `${this.playerPieces.length} pieces`;
+
+        const enemyCount = document.getElementById('enemy-piece-count');
+        if (enemyCount) enemyCount.textContent = `${this.enemyPieces.length} pieces`;
+
+        const cardsPlayed = document.getElementById('cards-played');
+        if (cardsPlayed) cardsPlayed.textContent = this.cardsPlayedThisBattle;
 
         const turnIndicator = document.getElementById('turn-indicator');
-        if (this.knightJumpActive) {
-            turnIndicator.textContent = 'Knight Jump Active!';
-        } else if (this.snipeActive) {
-            turnIndicator.textContent = 'Snipe Active!';
-        } else {
+        if (turnIndicator) {
             turnIndicator.textContent = this.isPlayerTurn ? 'Your Turn' : 'Enemy Turn';
+            turnIndicator.classList.toggle('enemy-turn', !this.isPlayerTurn);
         }
-        turnIndicator.classList.toggle('enemy-turn', !this.isPlayerTurn);
     }
 
     renderEnemyIntent() {
         const intentText = document.getElementById('intent-text');
+        if (!intentText) return;
+
         if (this.enemyIntent) {
             const piece = this.enemyIntent.piece;
-            const from = this.toChessNotation(this.enemyIntent.from.row, this.enemyIntent.from.col);
             const to = this.toChessNotation(this.enemyIntent.to.row, this.enemyIntent.to.col);
-            const isCapture = this.board[this.enemyIntent.to.row][this.enemyIntent.to.col] !== null;
-            intentText.textContent = `${piece.type} ${from} ${isCapture ? 'captures' : 'to'} ${to}`;
+            const isCapture = this.board[this.enemyIntent.to.row]?.[this.enemyIntent.to.col] !== null;
+            intentText.textContent = `${piece.type} ${isCapture ? 'captures' : '→'} ${to}`;
         } else {
             intentText.textContent = '-';
         }
     }
 
     toChessNotation(row, col) {
-        const files = 'abcdefgh';
-        const ranks = '87654321';
-        return files[col] + ranks[row];
+        return 'abcdefgh'[col] + '87654321'[row];
     }
 
     showCardInstructions(text) {
-        document.getElementById('card-instructions').textContent = text;
+        const el = document.getElementById('card-instructions');
+        if (el) el.textContent = text;
     }
 
     clearCardInstructions() {
-        document.getElementById('card-instructions').textContent = '';
+        const el = document.getElementById('card-instructions');
+        if (el) el.textContent = '';
     }
 
     // ============================================
-    // EVENT HANDLING
+    // INPUT HANDLING
     // ============================================
-
-    bindEvents() {
-        // Board clicks
-        document.getElementById('board').addEventListener('click', (e) => {
-            if (this.gameOver) return;
-            
-            const cell = e.target.closest('.cell');
-            if (!cell) return;
-
-            const row = parseInt(cell.dataset.row);
-            const col = parseInt(cell.dataset.col);
-            
-            this.handleCellClick(row, col);
-        });
-
-        // Card clicks
-        document.getElementById('card-hand').addEventListener('click', (e) => {
-            if (this.gameOver || !this.isPlayerTurn) return;
-            
-            const card = e.target.closest('.card');
-            if (!card || card.classList.contains('disabled')) return;
-
-            const cardId = card.dataset.card;
-            this.handleCardClick(cardId);
-        });
-
-        // Restart button
-        document.getElementById('restart-btn').addEventListener('click', () => {
-            this.restart();
-        });
-
-        // Change squad button
-        document.getElementById('change-squad-btn').addEventListener('click', () => {
-            this.returnToLoadout();
-        });
-
-        // Help button
-        document.getElementById('help-btn').addEventListener('click', () => {
-            document.getElementById('help-overlay').classList.add('active');
-        });
-
-        // Close help
-        document.getElementById('close-help').addEventListener('click', () => {
-            document.getElementById('help-overlay').classList.remove('active');
-        });
-
-        // Start game button (in help overlay)
-        document.getElementById('start-game-btn').addEventListener('click', () => {
-            document.getElementById('help-overlay').classList.remove('active');
-        });
-
-        // Close help when clicking outside
-        document.getElementById('help-overlay').addEventListener('click', (e) => {
-            if (e.target === document.getElementById('help-overlay')) {
-                document.getElementById('help-overlay').classList.remove('active');
-            }
-        });
-
-        // Show help on first visit
-        if (!localStorage.getItem('chessRoguelikePlayed')) {
-            document.getElementById('help-overlay').classList.add('active');
-            localStorage.setItem('chessRoguelikePlayed', 'true');
-        }
-    }
 
     handleCellClick(row, col) {
-        // If we're in a card action state that needs target selection, handle that
-        // (instant cards allow normal piece movement)
         if (this.cardState && this.cardState.type !== 'instant') {
             this.handleCardAction(row, col);
             return;
@@ -604,12 +1011,10 @@ class ChessRoguelike {
         if (!this.isPlayerTurn) return;
 
         const piece = this.board[row][col];
-
-        // Clicking on a valid move -> execute move
         const validMove = this.validMoves.find(m => m.row === row && m.col === col);
+
         if (this.selectedPiece && validMove) {
-            // If an instant card was active, consume it now
-            if (this.cardState && this.cardState.type === 'instant') {
+            if (this.cardState?.type === 'instant') {
                 this.cardsPlayedThisBattle++;
                 this.selectedCard = null;
                 this.cardState = null;
@@ -622,30 +1027,26 @@ class ChessRoguelike {
             return;
         }
 
-        // Clicking on own piece -> select it
-        if (piece && piece.owner === 'player') {
+        if (piece?.owner === 'player') {
             this.selectedPiece = piece;
             this.validMoves = this.getValidMoves(piece);
             this.render();
             return;
         }
 
-        // Clicking elsewhere -> deselect
         this.selectedPiece = null;
         this.validMoves = [];
         this.render();
     }
 
     handleCardClick(cardId) {
-        if (this.cardsPlayedThisBattle >= this.maxCardsPerBattle) return;
+        if (this.cardsPlayedThisBattle >= MAX_CARDS_PER_BATTLE) return;
 
-        const card = CARDS[cardId];
-        
-        // If clicking same card, deselect
+        const card = CARD_DEFINITIONS[cardId];
+        if (!card) return;
+
         if (this.selectedCard === cardId) {
-            // Deactivate instant card effects if they were previewing
-            this.knightJumpActive = false;
-            this.snipeActive = false;
+            this.deactivateCardEffects();
             this.selectedCard = null;
             this.cardState = null;
             this.clearCardInstructions();
@@ -653,587 +1054,424 @@ class ChessRoguelike {
             return;
         }
 
-        // Deactivate any previously active instant card effects
-        this.knightJumpActive = false;
-        this.snipeActive = false;
-
+        this.deactivateCardEffects();
         this.selectedCard = cardId;
-
-        // Clear any piece selection when using a card
         this.selectedPiece = null;
         this.validMoves = [];
 
-        switch (card.action) {
-            case 'instant':
-                // Don't execute immediately - let player preview and cancel if needed
+        switch (card.targeting) {
+            case 'none':
                 this.cardState = { type: 'instant', card: cardId };
-                this.activateInstantCard(cardId);
+                if (card.execute) card.execute(this);
                 break;
-            case 'selectEnemy':
-                this.cardState = { type: 'selectEnemy', card: cardId };
-                if (cardId === 'shieldBash') {
-                    this.showCardInstructions('Select an adjacent enemy piece to push back.');
-                }
+            case 'own_piece':
+                this.cardState = { type: 'selectPlayerPiece', card: cardId, filter: card.pieceFilter };
+                this.showCardInstructions(`Select one of your pieces for ${card.name}.`);
                 break;
-            case 'selectPlayerPiece':
-                this.cardState = { type: 'selectPlayerPiece', card: cardId };
-                if (cardId === 'divineShield') {
-                    this.showCardInstructions('Select a piece to enter Diamond Form (Invulnerable + Immobile).');
-                }
+            case 'enemy_piece':
+                this.cardState = { type: 'selectEnemy', card: cardId, filter: card.pieceFilter };
+                this.showCardInstructions(`Select an enemy piece for ${card.name}.`);
                 break;
-            case 'selectEmpty':
+            case 'any_piece':
+                this.cardState = { type: 'selectAny', card: cardId };
+                this.showCardInstructions(`Select any piece for ${card.name}.`);
+                break;
+            case 'empty_square':
                 this.cardState = { type: 'selectEmpty', card: cardId };
-                if (cardId === 'caltrops') {
-                    this.showCardInstructions('Select an empty square to place a lethal trap.');
-                }
+                this.showCardInstructions(`Select an empty square for ${card.name}.`);
                 break;
+            case 'two_pieces':
+                this.cardState = { type: 'selectTwoPieces', card: cardId, firstPiece: null, requiresAdjacent: card.requiresAdjacent, requiresFriendly: card.requiresFriendly };
+                this.showCardInstructions(`Select the first piece for ${card.name}.`);
+                break;
+            case 'adjacent_enemy':
+                this.cardState = { type: 'selectAdjacentEnemy', card: cardId };
+                this.showCardInstructions(`Select an adjacent enemy for ${card.name}.`);
+                break;
+            default:
+                this.cardState = { type: 'instant', card: cardId };
+                if (card.execute) card.execute(this);
         }
 
         this.render();
+    }
+
+    deactivateCardEffects() {
+        this.knightJumpActive = false;
+        this.snipeActive = false;
+        this.rallyActive = false;
+        this.dashPiece = null;
+        this.ghostWalkPiece = null;
+        this.ricochetPiece = null;
     }
 
     handleCardAction(row, col) {
         const piece = this.board[row][col];
+        const card = CARD_DEFINITIONS[this.cardState?.card];
 
-        switch (this.cardState.type) {
-            case 'selectEnemy': // Shield Bash - select adjacent enemy piece
-                if (piece && piece.owner === 'enemy') {
-                    if (this.cardState.card === 'shieldBash') {
-                        this.executeShieldBash(piece);
+        switch (this.cardState?.type) {
+            case 'selectEnemy':
+                if (piece?.owner === 'enemy') {
+                    if (this.cardState.filter && !this.cardState.filter(piece)) {
+                        this.showCardInstructions('Invalid target.');
+                        return;
                     }
+                    if (card?.execute) card.execute(this, piece);
                 }
                 break;
-
-            case 'selectPlayerPiece': // Divine Shield - select your piece
-                if (piece && piece.owner === 'player') {
-                    if (this.cardState.card === 'divineShield') {
-                        this.executeDivineShield(piece);
+            case 'selectPlayerPiece':
+                if (piece?.owner === 'player') {
+                    if (this.cardState.filter && !this.cardState.filter(piece)) {
+                        this.showCardInstructions('Invalid target.');
+                        return;
                     }
+                    if (card?.execute) card.execute(this, piece);
                 }
                 break;
-
-            case 'selectEmpty': // Caltrops - select empty square
+            case 'selectAny':
+                if (piece && card?.execute) card.execute(this, piece);
+                break;
+            case 'selectEmpty':
                 if (!piece) {
-                    if (this.cardState.card === 'caltrops') {
-                        this.executeCaltrops(row, col);
+                    if (card?.execute) {
+                        card.execute(this, row, col);
+                    } else if (this.cardState.piece) {
+                        this.executeEmptySquareAction(row, col);
                     }
                 }
+                break;
+            case 'selectTwoPieces':
+                if (piece) {
+                    if (!this.cardState.firstPiece) {
+                        if (this.cardState.requiresFriendly && piece.owner !== 'player') {
+                            this.showCardInstructions('Select your piece first.');
+                            return;
+                        }
+                        this.cardState.firstPiece = piece;
+                        this.showCardInstructions('Select the second piece.');
+                    } else {
+                        if (this.cardState.requiresFriendly && piece.owner !== 'player') {
+                            this.showCardInstructions('Select your piece.');
+                            return;
+                        }
+                        if (this.cardState.requiresAdjacent) {
+                            const dist = Math.max(Math.abs(piece.row - this.cardState.firstPiece.row), Math.abs(piece.col - this.cardState.firstPiece.col));
+                            if (dist > 1) {
+                                this.showCardInstructions('Pieces must be adjacent!');
+                                return;
+                            }
+                        }
+                        if (card?.execute) card.execute(this, this.cardState.firstPiece, piece);
+                    }
+                }
+                break;
+            case 'selectAdjacentEnemy':
+                if (piece?.owner === 'enemy') {
+                    const isAdj = this.playerPieces.some(p => Math.max(Math.abs(p.row - piece.row), Math.abs(p.col - piece.col)) === 1);
+                    if (!isAdj) {
+                        this.showCardInstructions('Must be adjacent to your piece!');
+                        return;
+                    }
+                    if (card?.execute) card.execute(this, piece);
+                }
+                break;
+            case 'selectDirection':
+                this.executeDirectionAction(row, col);
                 break;
         }
 
         this.render();
     }
 
-    // ============================================
-    // CARD EXECUTION
-    // ============================================
+    executeEmptySquareAction(row, col) {
+        const cardId = this.cardState.card;
+        const target = this.cardState.piece;
 
-    // Activate instant card effect for preview (doesn't consume the card yet)
-    activateInstantCard(cardId) {
         switch (cardId) {
-            case 'knightJump':
-                this.knightJumpActive = true;
-                this.showCardInstructions("Knight's Jump active! Make a move or click card again to cancel.");
+            case 'teleport':
+                this.board[target.row][target.col] = null;
+                target.row = row;
+                target.col = col;
+                this.board[row][col] = target;
+                this.showCardInstructions(`${target.type} teleported!`);
+                this.finishCardPlay();
                 break;
-            case 'snipe':
-                this.snipeActive = true;
-                this.showCardInstructions("Snipe active! Make a move or click card again to cancel.");
+            case 'clone':
+                const dist = Math.max(Math.abs(row - target.row), Math.abs(col - target.col));
+                if (dist > 1) {
+                    this.showCardInstructions('Must be adjacent!');
+                    return;
+                }
+                const clone = { type: target.type, owner: 'player', row, col, id: `clone-${Date.now()}`, isClone: true };
+                this.board[row][col] = clone;
+                this.playerPieces.push(clone);
+                this.showCardInstructions(`${target.type} cloned!`);
+                this.finishCardPlay();
+                break;
+            case 'kidnap':
+                this.board[target.row][target.col] = null;
+                target.row = row;
+                target.col = col;
+                this.board[row][col] = target;
+                this.showCardInstructions(`${target.type} kidnapped!`);
+                this.finishCardPlay();
                 break;
         }
     }
 
-    // Caltrops: Place a lethal trap on an empty square
-    executeCaltrops(row, col) {
-        const key = `${row},${col}`;
-        this.traps.set(key, true);
-        this.showCardInstructions(`Caltrops placed at ${this.toChessNotation(row, col)}!`);
-        setTimeout(() => this.clearCardInstructions(), 1500);
+    executeDirectionAction(row, col) {
+        const piece = this.cardState.piece;
+        const dirs = this.cardState.directions;
 
-        // Recalculate enemy intent (AI should avoid traps)
-        this.calculateEnemyIntent();
-
-        this.finishCardPlay();
-    }
-
-    // Shield Bash: Push an adjacent enemy 1 tile back. Captures if they hit a wall.
-    executeShieldBash(enemyPiece) {
-        // Find if any player piece is adjacent to this enemy
-        let pusherPiece = null;
-        for (const playerPiece of this.playerPieces) {
-            const rowDist = Math.abs(playerPiece.row - enemyPiece.row);
-            const colDist = Math.abs(playerPiece.col - enemyPiece.col);
-            // Adjacent means distance <= 1 in both directions (including diagonals)
-            if (rowDist <= 1 && colDist <= 1 && (rowDist > 0 || colDist > 0)) {
-                pusherPiece = playerPiece;
-                break;
+        for (const [dr, dc] of dirs) {
+            if (piece.row + dr === row && piece.col + dc === col) {
+                if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= 8 || this.board[row][col]) {
+                    this.showCardInstructions('Cannot move there!');
+                    return;
+                }
+                this.board[piece.row][piece.col] = null;
+                piece.row = row;
+                piece.col = col;
+                this.board[row][col] = piece;
+                this.showCardInstructions(`${piece.type} moved!`);
+                this.finishCardPlay();
+                return;
             }
         }
-
-        if (!pusherPiece) {
-            this.showCardInstructions("No adjacent player piece to push from!");
-            setTimeout(() => this.clearCardInstructions(), 1500);
-            return;
-        }
-
-        // Calculate push direction (away from the player piece)
-        const pushDirRow = Math.sign(enemyPiece.row - pusherPiece.row);
-        const pushDirCol = Math.sign(enemyPiece.col - pusherPiece.col);
-
-        // If no direction (same position), can't push
-        if (pushDirRow === 0 && pushDirCol === 0) {
-            this.showCardInstructions("Cannot determine push direction!");
-            setTimeout(() => this.clearCardInstructions(), 1500);
-            return;
-        }
-
-        const targetRow = enemyPiece.row + pushDirRow;
-        const targetCol = enemyPiece.col + pushDirCol;
-
-        // Check if target is out of bounds or occupied -> instant kill
-        const isOutOfBounds = targetRow < 0 || targetRow >= BOARD_ROWS || targetCol < 0 || targetCol > 7;
-        const isOccupied = !isOutOfBounds && this.board[targetRow][targetCol] !== null;
-
-        if (isOutOfBounds || isOccupied) {
-            // Instant kill - enemy is crushed against wall/piece
-            this.showCardInstructions(`${enemyPiece.type} crushed against ${isOutOfBounds ? 'the wall' : 'another piece'}!`);
-            this.board[enemyPiece.row][enemyPiece.col] = null;
-            this.capturePiece(enemyPiece);
-        } else {
-            // Move enemy to target tile
-            this.board[enemyPiece.row][enemyPiece.col] = null;
-            enemyPiece.row = targetRow;
-            enemyPiece.col = targetCol;
-            this.board[targetRow][targetCol] = enemyPiece;
-
-            // Check if enemy lands on a trap (Caltrops)
-            const trapKey = `${targetRow},${targetCol}`;
-            if (this.traps.has(trapKey)) {
-                this.traps.delete(trapKey);
-                this.showCardInstructions(`${enemyPiece.type} pushed into caltrops and destroyed!`);
-                this.board[targetRow][targetCol] = null;
-                this.capturePiece(enemyPiece);
-            } else {
-                this.showCardInstructions(`${enemyPiece.type} pushed to ${this.toChessNotation(targetRow, targetCol)}!`);
-            }
-        }
-
-        setTimeout(() => this.clearCardInstructions(), 1500);
-
-        // Recalculate enemy intent
-        this.calculateEnemyIntent();
-
-        // Check game end in case we captured the king
-        this.checkGameEnd();
-
-        this.finishCardPlay();
+        this.showCardInstructions('Invalid direction!');
     }
 
-    // Diamond Form: Piece becomes invulnerable but cannot move for 1 round
-    executeDivineShield(piece) {
-        this.invulnerablePieces.set(piece.id, 2); // 2 = lasts through enemy turn + next player turn
-        this.showCardInstructions(`${piece.type} enters Diamond Form - Invulnerable but immobile!`);
-        setTimeout(() => this.clearCardInstructions(), 1500);
+    finishCardPlay(endTurn = true) {
+        const cardId = this.selectedCard;
+        const card = CARD_DEFINITIONS[cardId];
 
-        // Recalculate enemy intent since they can't capture this piece
-        this.calculateEnemyIntent();
-
-        this.finishCardPlay();
-    }
-
-    finishCardPlay() {
         this.cardsPlayedThisBattle++;
+        this.runStats.totalCardsPlayed++;
+
+        // Handle BURN cards
+        if (card?.isBurn) {
+            this.hand = this.hand.filter(c => c !== cardId);
+            this.deck = this.deck.filter(c => c !== cardId);
+        }
+
         this.selectedCard = null;
         this.cardState = null;
 
-        // Playing a card ENDS your turn - no free move + card combo
-        this.endPlayerTurn();
+        // Recalculate enemy intent (fire and forget, will update UI when done)
+        this.calculateEnemyIntent();
+
+        if (endTurn) {
+            this.endPlayerTurn();
+        } else {
+            this.render();
+        }
     }
 
     // ============================================
-    // MOVEMENT LOGIC
+    // MOVEMENT
     // ============================================
 
     getValidMoves(piece, forAI = false) {
-        // Traitor pieces cannot move
-        if (this.traitorPieces.has(piece.id)) {
-            return [];
-        }
-
-        // Diamond Form (invulnerable) pieces cannot move - they are in stasis
-        if (this.invulnerablePieces.has(piece.id)) {
+        if (this.frozenPieces.has(piece.id) || this.invulnerablePieces.has(piece.id)) {
             return [];
         }
 
         const moves = [];
 
-        // Normal moves based on piece type
         switch (piece.type) {
-            case PIECES.KING:
-                this.addKingMoves(piece, moves, forAI);
-                break;
-            case PIECES.QUEEN:
-                this.addQueenMoves(piece, moves, forAI);
-                break;
-            case PIECES.ROOK:
-                this.addRookMoves(piece, moves, forAI);
-                break;
-            case PIECES.BISHOP:
-                this.addBishopMoves(piece, moves, forAI);
-                break;
-            case PIECES.KNIGHT:
-                this.addKnightMoves(piece, moves, forAI);
-                break;
-            case PIECES.PAWN:
-                this.addPawnMoves(piece, moves, forAI);
-                break;
+            case PIECES.KING: this.addKingMoves(piece, moves, forAI); break;
+            case PIECES.QUEEN: this.addQueenMoves(piece, moves, forAI); break;
+            case PIECES.ROOK: this.addRookMoves(piece, moves, forAI); break;
+            case PIECES.BISHOP: this.addBishopMoves(piece, moves, forAI); break;
+            case PIECES.KNIGHT: this.addKnightMoves(piece, moves, forAI); break;
+            case PIECES.PAWN: this.addPawnMoves(piece, moves, forAI); break;
         }
 
-        // Knight's Jump: All player pieces can also move like knights
         if (this.knightJumpActive && piece.owner === 'player' && piece.type !== PIECES.KNIGHT) {
             this.addKnightMoves(piece, moves, forAI);
         }
 
-        // Snipe: Ranged pieces get piercing captures
-        if (this.snipeActive && piece.owner === 'player' &&
-            (piece.type === PIECES.ROOK || piece.type === PIECES.BISHOP || piece.type === PIECES.QUEEN)) {
-            this.addPiercingMoves(piece, moves, forAI);
+        if (this.snipeActive && piece.owner === 'player' && ['rook', 'bishop', 'queen'].includes(piece.type)) {
+            this.addPiercingMoves(piece, moves);
         }
 
         return moves;
     }
 
-    addKingMoves(piece, moves, forAI = false) {
-        const directions = [
-            [-1, -1], [-1, 0], [-1, 1],
-            [0, -1],          [0, 1],
-            [1, -1],  [1, 0], [1, 1]
-        ];
-        for (const [dr, dc] of directions) {
+    addKingMoves(piece, moves, forAI) {
+        for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
             this.addMoveIfValid(piece, piece.row + dr, piece.col + dc, moves, forAI);
         }
     }
 
-    addQueenMoves(piece, moves, forAI = false) {
+    addQueenMoves(piece, moves, forAI) {
         this.addRookMoves(piece, moves, forAI);
         this.addBishopMoves(piece, moves, forAI);
     }
 
-    addRookMoves(piece, moves, forAI = false) {
-        const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-        for (const [dr, dc] of directions) {
+    addRookMoves(piece, moves, forAI) {
+        for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
             for (let i = 1; i < 8; i++) {
-                if (!this.addMoveIfValid(piece, piece.row + dr * i, piece.col + dc * i, moves, forAI)) {
-                    break;
-                }
-                // Stop if we hit a piece (can capture but not go through)
-                if (this.board[piece.row + dr * i]?.[piece.col + dc * i]) break;
+                if (!this.addMoveIfValid(piece, piece.row + dr*i, piece.col + dc*i, moves, forAI)) break;
+                if (this.board[piece.row + dr*i]?.[piece.col + dc*i]) break;
             }
         }
     }
 
-    addBishopMoves(piece, moves, forAI = false) {
-        const directions = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
-        for (const [dr, dc] of directions) {
+    addBishopMoves(piece, moves, forAI) {
+        for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
             for (let i = 1; i < 8; i++) {
-                if (!this.addMoveIfValid(piece, piece.row + dr * i, piece.col + dc * i, moves, forAI)) {
-                    break;
-                }
-                if (this.board[piece.row + dr * i]?.[piece.col + dc * i]) break;
+                if (!this.addMoveIfValid(piece, piece.row + dr*i, piece.col + dc*i, moves, forAI)) break;
+                if (this.board[piece.row + dr*i]?.[piece.col + dc*i]) break;
             }
         }
     }
 
-    addKnightMoves(piece, moves, forAI = false) {
-        const jumps = [
-            [-2, -1], [-2, 1], [-1, -2], [-1, 2],
-            [1, -2], [1, 2], [2, -1], [2, 1]
-        ];
-        for (const [dr, dc] of jumps) {
+    addKnightMoves(piece, moves, forAI) {
+        for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
             this.addMoveIfValid(piece, piece.row + dr, piece.col + dc, moves, forAI);
         }
     }
 
-    addPawnMoves(piece, moves, forAI = false) {
-        const direction = piece.owner === 'player' ? -1 : 1;
+    addPawnMoves(piece, moves, forAI) {
+        const dir = piece.owner === 'player' ? -1 : 1;
         const startRow = piece.owner === 'player' ? 6 : 1;
+        const newRow = piece.row + dir;
 
-        // Forward move
-        const newRow = piece.row + direction;
         if (newRow >= 0 && newRow < BOARD_ROWS && !this.board[newRow][piece.col]) {
-            // AI avoids traps
-            const trapKey = `${newRow},${piece.col}`;
-            if (!forAI || !this.traps.has(trapKey)) {
+            if (!forAI || !this.traps.has(`${newRow},${piece.col}`)) {
                 moves.push({ row: newRow, col: piece.col });
             }
-
-            // Double move from start
-            const doubleRow = piece.row + direction * 2;
-            if (piece.row === startRow && doubleRow >= 0 && doubleRow < BOARD_ROWS && !this.board[doubleRow][piece.col]) {
-                const doubleTrapKey = `${doubleRow},${piece.col}`;
-                if (!forAI || !this.traps.has(doubleTrapKey)) {
+            const doubleRow = piece.row + dir * 2;
+            if (piece.row === startRow && !this.board[doubleRow]?.[piece.col]) {
+                if (!forAI || !this.traps.has(`${doubleRow},${piece.col}`)) {
                     moves.push({ row: doubleRow, col: piece.col });
                 }
             }
         }
 
-        // Captures
         for (const dc of [-1, 1]) {
             const captureCol = piece.col + dc;
-            if (captureCol >= 0 && captureCol < 8 && newRow >= 0 && newRow < BOARD_ROWS) {
-                const target = this.board[newRow][captureCol];
+            if (captureCol >= 0 && captureCol < 8) {
+                const target = this.board[newRow]?.[captureCol];
                 if (target && target.owner !== piece.owner) {
-                    // Check if target is invulnerable (for AI)
-                    if (forAI && this.invulnerablePieces.has(target.id)) {
-                        continue; // AI can't capture invulnerable pieces
-                    }
-                    // AI avoids traps
-                    const captureTrapKey = `${newRow},${captureCol}`;
-                    if (forAI && this.traps.has(captureTrapKey)) {
-                        continue;
-                    }
+                    if (forAI && this.invulnerablePieces.has(target.id)) continue;
+                    if (forAI && this.traps.has(`${newRow},${captureCol}`)) continue;
                     moves.push({ row: newRow, col: captureCol });
                 }
             }
         }
     }
 
-    // Piercing moves for Snipe card - can capture through one obstacle
-    addPiercingMoves(piece, moves, forAI = false) {
-        const directions = piece.type === PIECES.ROOK ?
-            [[-1, 0], [1, 0], [0, -1], [0, 1]] :
-            piece.type === PIECES.BISHOP ?
-            [[-1, -1], [-1, 1], [1, -1], [1, 1]] :
-            [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]]; // Queen
+    addPiercingMoves(piece, moves) {
+        const dirs = piece.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]] :
+                     piece.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]] :
+                     [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
 
-        for (const [dr, dc] of directions) {
-            let obstacleCount = 0;
+        for (const [dr, dc] of dirs) {
+            let obstacles = 0;
             for (let i = 1; i < 8; i++) {
-                const row = piece.row + dr * i;
-                const col = piece.col + dc * i;
-
-                if (row < 0 || row >= BOARD_ROWS || col < 0 || col > 7) break;
+                const row = piece.row + dr*i;
+                const col = piece.col + dc*i;
+                if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= 8) break;
 
                 const target = this.board[row][col];
                 if (target) {
-                    obstacleCount++;
-                    if (obstacleCount === 1) {
-                        // First obstacle - continue to look for capture behind it
-                        continue;
-                    } else if (obstacleCount === 2 && target.owner !== piece.owner) {
-                        // Second piece behind first obstacle - can capture with piercing
-                        // King's armor is too thick - cannot be targeted by piercing shots
-                        if (target.type === PIECES.KING) {
-                            break;
-                        }
-                        if (!this.invulnerablePieces.has(target.id)) {
-                            // Check if this move isn't already in moves
-                            if (!moves.some(m => m.row === row && m.col === col)) {
-                                moves.push({ row, col, piercing: true });
-                            }
+                    obstacles++;
+                    if (obstacles === 2 && target.owner !== piece.owner && target.type !== 'king') {
+                        if (!this.invulnerablePieces.has(target.id) && !moves.some(m => m.row === row && m.col === col)) {
+                            moves.push({ row, col, piercing: true });
                         }
                         break;
-                    } else {
-                        break; // Too many obstacles or same owner
                     }
+                    if (obstacles >= 2) break;
                 }
             }
         }
     }
 
-    addMoveIfValid(piece, row, col, moves, forAI = false) {
-        if (row < 0 || row >= BOARD_ROWS || col < 0 || col > 7) return false;
-
-        // AI avoids traps
-        if (forAI) {
-            const trapKey = `${row},${col}`;
-            if (this.traps.has(trapKey)) {
-                return false;
-            }
-        }
+    addMoveIfValid(piece, row, col, moves, forAI) {
+        if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= 8) return false;
+        if (forAI && this.traps.has(`${row},${col}`)) return false;
 
         const target = this.board[row][col];
-
         if (!target) {
             moves.push({ row, col });
             return true;
         }
-
         if (target.owner !== piece.owner) {
-            // Check if target is invulnerable (AI respects this, player might not need to)
-            if (forAI && this.invulnerablePieces.has(target.id)) {
-                return false; // AI can't capture invulnerable pieces, and line is blocked
-            }
-            // Can't capture invulnerable pieces
-            if (this.invulnerablePieces.has(target.id)) {
-                return false;
-            }
+            if (forAI && this.invulnerablePieces.has(target.id)) return false;
+            if (this.invulnerablePieces.has(target.id)) return false;
             moves.push({ row, col });
             return true;
         }
-
-        return false; // Own piece blocking
+        return false;
     }
 
     movePiece(piece, toRow, toCol, isPiercing = false) {
-        // For piercing captures, remove the piece in between too
-        if (isPiercing) {
-            // Find and remove the obstacle piece
-            const dr = Math.sign(toRow - piece.row);
-            const dc = Math.sign(toCol - piece.col);
-            for (let i = 1; i < 8; i++) {
-                const midRow = piece.row + dr * i;
-                const midCol = piece.col + dc * i;
-                if (midRow === toRow && midCol === toCol) break;
-                const midPiece = this.board[midRow][midCol];
-                if (midPiece) {
-                    // This is the obstacle - leave it alone for piercing
-                    break;
-                }
-            }
-        }
-
-        // Check for trap BEFORE moving
         const trapKey = `${toRow},${toCol}`;
-        const steppedOnTrap = this.traps.has(trapKey);
 
-        if (steppedOnTrap) {
-            // Remove the trap
+        if (this.traps.has(trapKey)) {
             this.traps.delete(trapKey);
-            // Remove the moving piece from its current position
             this.board[piece.row][piece.col] = null;
-            // Destroy the piece (it stepped on a trap)
             this.capturePiece(piece);
-            if (piece.owner === 'player') {
-                this.piecesLost++;
-            } else {
-                this.piecesCaptures++;
-            }
-            // Check win/lose conditions
             this.checkGameEnd();
-            return; // Don't continue with normal move
+            return;
         }
 
-        const capturedPiece = this.board[toRow][toCol];
+        const captured = this.board[toRow][toCol];
+        if (captured) this.capturePiece(captured);
 
-        // Handle capture
-        if (capturedPiece) {
-            this.capturePiece(capturedPiece);
-            if (piece.owner === 'player') {
-                this.piecesCaptures++;
-            } else {
-                this.piecesLost++;
-            }
-        }
-
-        // Move piece
         this.board[piece.row][piece.col] = null;
         piece.row = toRow;
         piece.col = toCol;
         this.board[toRow][toCol] = piece;
 
-        // Track moves
-        if (piece.owner === 'player') {
-            this.moveCount++;
-        }
-
-        // Pawn promotion (auto to queen)
+        // Pawn promotion
         if (piece.type === PIECES.PAWN) {
-            const promotionRow = piece.owner === 'player' ? 0 : BOARD_ROWS - 1;
-            if (toRow === promotionRow) {
-                piece.type = PIECES.QUEEN;
-            }
+            const promoRow = piece.owner === 'player' ? 0 : 7;
+            if (toRow === promoRow) piece.type = PIECES.QUEEN;
         }
 
-        // Check win/lose conditions
         this.checkGameEnd();
     }
 
     capturePiece(piece) {
-        // Spawn particle effects at capture location
         this.spawnCaptureParticles(piece.row, piece.col, piece.owner);
-
-        // Screen shake effect
         this.triggerScreenShake();
 
         if (piece.owner === 'player') {
             this.playerPieces = this.playerPieces.filter(p => p !== piece);
-            this.invulnerablePieces.delete(piece.id);
+            this.capturedPlayerPieces.push({ ...piece });
+            this.runStats.piecesLost++;
         } else {
             this.enemyPieces = this.enemyPieces.filter(p => p !== piece);
-            this.frozenPieces.delete(piece.id);
-            this.traitorPieces.delete(piece.id);
+            this.capturedEnemyPieces.push({ ...piece });
+        }
+
+        // Clean up status effects
+        [this.frozenPieces, this.invulnerablePieces, this.shieldedPieces, this.bracedPieces, this.phantomPieces].forEach(m => m.delete(piece.id));
+
+        if (this.chainReactionActive && piece.owner === 'enemy') {
+            this.chainReactionActive = false;
+            this.triggerChainReaction(piece.row, piece.col);
         }
     }
 
-    // ============================================
-    // VISUAL EFFECTS (Juice)
-    // ============================================
-
-    // Spawn particle explosion on capture
-    spawnCaptureParticles(row, col, owner) {
-        const board = document.getElementById('board');
-        if (!board) return;
-
-        const rect = board.getBoundingClientRect();
-        const cellSize = 65;
-        const padding = 12;
-        const centerX = rect.left + padding + col * cellSize + cellSize / 2;
-        const centerY = rect.top + padding + row * cellSize + cellSize / 2;
-
-        const colors = owner === 'player'
-            ? ['#00d2ff', '#0088cc', '#66aadd', '#ffffff']
-            : ['#ff4444', '#ff6666', '#cc0000', '#ffaa00'];
-
-        for (let i = 0; i < 12; i++) {
-            const particle = document.createElement('div');
-            particle.className = 'particle';
-
-            const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
-            const distance = 40 + Math.random() * 60;
-            const tx = Math.cos(angle) * distance;
-            const ty = Math.sin(angle) * distance;
-
-            particle.style.cssText = `
-                left: ${centerX}px;
-                top: ${centerY}px;
-                width: ${6 + Math.random() * 8}px;
-                height: ${6 + Math.random() * 8}px;
-                background: ${colors[Math.floor(Math.random() * colors.length)]};
-                box-shadow: 0 0 ${4 + Math.random() * 6}px currentColor;
-                --tx: ${tx}px;
-                --ty: ${ty}px;
-            `;
-
-            document.body.appendChild(particle);
-
-            // Remove particle after animation
-            setTimeout(() => particle.remove(), 800);
+    triggerChainReaction(row, col) {
+        let damaged = 0;
+        for (const [dr, dc] of [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]]) {
+            const r = row + dr, c = col + dc;
+            if (r >= 0 && r < BOARD_ROWS && c >= 0 && c < 8) {
+                const adj = this.board[r][c];
+                if (adj?.owner === 'enemy' && adj.type !== 'king') {
+                    this.board[r][c] = null;
+                    this.capturePiece(adj);
+                    damaged++;
+                }
+            }
         }
-    }
-
-    // Trigger screen shake effect
-    triggerScreenShake() {
-        const gameContainer = document.querySelector('.game-container');
-        if (gameContainer) {
-            gameContainer.classList.add('shake');
-            setTimeout(() => gameContainer.classList.remove('shake'), 400);
-        }
-    }
-
-    // Show turn banner
-    showTurnBanner(isPlayerTurn) {
-        // Remove existing banner if any
-        const existingBanner = document.querySelector('.turn-banner');
-        if (existingBanner) existingBanner.remove();
-
-        const banner = document.createElement('div');
-        banner.className = `turn-banner ${isPlayerTurn ? 'player-turn' : 'enemy-turn-banner'} show`;
-        banner.textContent = isPlayerTurn ? 'YOUR TURN' : 'ENEMY TURN';
-
-        document.body.appendChild(banner);
-
-        // Remove after animation
-        setTimeout(() => banner.remove(), 1500);
+        if (damaged) this.showCardInstructions(`Chain Reaction! ${damaged} enemies destroyed!`);
     }
 
     // ============================================
@@ -1242,293 +1480,249 @@ class ChessRoguelike {
 
     endPlayerTurn() {
         this.isPlayerTurn = false;
-
-        // Reset turn-based card effects
         this.knightJumpActive = false;
         this.snipeActive = false;
-
         this.render();
 
         if (this.gameOver) return;
 
-        // Delay for enemy turn
-        setTimeout(() => {
-            this.doEnemyTurn();
-        }, 800);
+        setTimeout(() => this.doEnemyTurn(), 600);
     }
 
-    doEnemyTurn() {
+    async doEnemyTurn() {
         if (this.skipEnemyTurn) {
             this.skipEnemyTurn = false;
-            this.showCardInstructions('Enemy turn skipped!');
-            setTimeout(() => {
-                this.clearCardInstructions();
-                this.startPlayerTurn();
-            }, 1000);
+            this.startPlayerTurn();
             return;
         }
 
-        // Show enemy turn banner
-        this.showTurnBanner(false);
-
-        // Show "thinking" indicator
-        const intentText = document.getElementById('intent-text');
-        if (intentText) {
-            intentText.textContent = 'Calculating...';
-        }
-
-        // DYNAMIC INTENT: Re-evaluate the board based on player's actual move
         const gameState = this.getGameState();
-        const playerCards = this.getPlayerCards();
+        const playerCards = this.hand;
 
-        // Check if the previously intended move is still valid
         let bestMove = null;
-        if (this.enemyIntent && EnemyAI.isMoveStillLegal(this.enemyIntent, gameState)) {
-            // Intent is still valid - use it
+
+        // Check if cached intent is still valid
+        if (this.enemyIntent && typeof EnemyAI !== 'undefined' && EnemyAI.isMoveStillLegal(this.enemyIntent, gameState)) {
             bestMove = this.enemyIntent;
-        } else {
-            // Intent is invalid or doesn't exist - recalculate
-            bestMove = EnemyAI.calculateBestMove(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
-        }
-
-        if (bestMove) {
-            this.enemyIntent = bestMove; // Update intent for display
-            this.movePiece(bestMove.piece, bestMove.to.row, bestMove.to.col);
-            this.enemyMoveCount++;
-
-            // Log AI reasoning (for debugging)
-            if (bestMove.reasoning) {
-                console.log(`AI Move: ${bestMove.piece.type} - ${bestMove.reasoning} (Score: ${bestMove.score})`);
+        } else if (typeof EnemyAI !== 'undefined') {
+            // Use async Stockfish-powered AI
+            try {
+                bestMove = await EnemyAI.calculateBestMoveAsync(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+            } catch (err) {
+                console.warn('Async AI failed, using fallback:', err);
+                bestMove = EnemyAI.calculateBestMoveFallback(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
             }
         }
 
-        // Decrement status effect counters
+        if (bestMove) {
+            this.enemyIntent = bestMove;
+            this.movePiece(bestMove.piece, bestMove.to.row, bestMove.to.col);
+        }
+
         this.updateStatusEffects();
 
-        if (!this.gameOver) {
-            this.startPlayerTurn();
-        }
+        if (!this.gameOver) this.startPlayerTurn();
     }
 
     startPlayerTurn() {
         this.isPlayerTurn = true;
-        this.saveBoardState(); // Save state for Time Warp
-        this.calculateEnemyIntent();
+        this.saveBoardState();
         this.render();
 
-        // Show turn banner
-        this.showTurnBanner(true);
+        // Calculate enemy intent asynchronously (will update UI when done)
+        this.calculateEnemyIntent();
     }
 
     updateStatusEffects() {
-        // Update freeze counters
-        for (const [pieceId, turns] of this.frozenPieces) {
+        const decrement = (map) => {
+            for (const [id, turns] of map) {
+                if (turns <= 1) map.delete(id);
+                else map.set(id, turns - 1);
+            }
+        };
+
+        decrement(this.frozenPieces);
+        decrement(this.invulnerablePieces);
+        decrement(this.shieldedPieces);
+        decrement(this.bracedPieces);
+
+        // Phantom pieces
+        for (const [id, turns] of this.phantomPieces) {
             if (turns <= 1) {
-                this.frozenPieces.delete(pieceId);
+                this.phantomPieces.delete(id);
+                const phantom = this.playerPieces.find(p => p.id === id);
+                if (phantom) {
+                    this.board[phantom.row][phantom.col] = null;
+                    this.playerPieces = this.playerPieces.filter(p => p.id !== id);
+                }
             } else {
-                this.frozenPieces.set(pieceId, turns - 1);
+                this.phantomPieces.set(id, turns - 1);
             }
         }
 
-        // Update traitor counters
-        for (const [pieceId, turns] of this.traitorPieces) {
-            if (turns <= 1) {
-                this.traitorPieces.delete(pieceId);
+        // Controlled enemies
+        for (const [id, data] of this.controlledEnemies) {
+            if (data.turnsLeft <= 1) {
+                this.controlledEnemies.delete(id);
+                const piece = this.playerPieces.find(p => p.id === id);
+                if (piece) {
+                    piece.owner = 'enemy';
+                    this.playerPieces = this.playerPieces.filter(p => p.id !== id);
+                    this.enemyPieces.push(piece);
+                }
             } else {
-                this.traitorPieces.set(pieceId, turns - 1);
+                data.turnsLeft--;
             }
         }
 
-        // Update invulnerable counters
-        for (const [pieceId, turns] of this.invulnerablePieces) {
-            if (turns <= 1) {
-                this.invulnerablePieces.delete(pieceId);
-            } else {
-                this.invulnerablePieces.set(pieceId, turns - 1);
-            }
-        }
+        if (this.kingQueenMoves > 0) this.kingQueenMoves--;
+        if (this.extendedIntentTurns > 0) this.extendedIntentTurns--;
+
+        this.rallyActive = false;
+        this.showAllEnemyMoves = false;
+        this.loadedDiceActive = false;
+        this.zugzwangActive = false;
     }
 
     // ============================================
-    // ENEMY AI - CUSTOM PRIORITY-BASED SYSTEM
+    // AI
     // ============================================
 
-    calculateEnemyIntent() {
-        // Use the new custom AI system
+    getGameState() {
+        return {
+            board: this.board,
+            playerPieces: this.playerPieces,
+            enemyPieces: this.enemyPieces,
+            frozenPieces: this.frozenPieces,
+            invulnerablePieces: this.invulnerablePieces,
+            traps: this.traps
+        };
+    }
+
+    async calculateEnemyIntent() {
+        if (typeof EnemyAI === 'undefined') return;
         const gameState = this.getGameState();
-        const playerCards = this.getPlayerCards();
-        const move = EnemyAI.previewEnemyIntent(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
-        this.enemyIntent = move;
-    }
 
-    // Set AI difficulty: 'EASY', 'MEDIUM', 'HARD'
-    setAIDifficulty(difficulty) {
-        if (['EASY', 'MEDIUM', 'HARD'].includes(difficulty)) {
-            this.aiDifficulty = difficulty;
-            console.log(`AI Difficulty set to: ${difficulty}`);
+        try {
+            // Use async Stockfish-powered intent preview
+            this.enemyIntent = await EnemyAI.previewEnemyIntentAsync(gameState, this.hand, this.aiDifficulty, this.aiArchetype);
+        } catch (err) {
+            console.warn('Async intent failed, using fallback:', err);
+            this.enemyIntent = EnemyAI.previewEnemyIntent(gameState, this.hand, this.aiDifficulty, this.aiArchetype);
         }
-    }
 
-    // Set AI archetype: 'SWARM', 'HUNTER', 'WALL', 'TACTICIAN', 'AGGRESSOR'
-    setAIArchetype(archetype) {
-        if (['SWARM', 'HUNTER', 'WALL', 'TACTICIAN', 'AGGRESSOR'].includes(archetype)) {
-            this.aiArchetype = archetype;
-            console.log(`AI Archetype set to: ${archetype}`);
-        }
+        // Re-render to show updated intent
+        this.renderEnemyIntent();
+        this.renderBoard();
     }
 
     // ============================================
-    // WIN/LOSE CONDITIONS
+    // WIN/LOSE
     // ============================================
 
     checkGameEnd() {
-        // Check if player king is captured
         const playerKing = this.playerPieces.find(p => p.type === PIECES.KING);
         if (!playerKing) {
-            this.endGame(false);
+            this.onBattleDefeat();
             return;
         }
 
-        // Check if enemy king is captured (or all enemies defeated)
         const enemyKing = this.enemyPieces.find(p => p.type === PIECES.KING);
         if (!enemyKing || this.enemyPieces.length === 0) {
-            this.endGame(true);
+            this.onBattleVictory();
             return;
         }
     }
 
-    endGame(victory) {
-        this.gameOver = true;
+    // ============================================
+    // BOARD HISTORY
+    // ============================================
 
-        const overlay = document.getElementById('game-over-overlay');
-        const text = document.getElementById('game-over-text');
-        const subtext = document.getElementById('game-over-subtext');
-        const content = overlay.querySelector('.overlay-content');
-
-        if (victory) {
-            text.textContent = 'GRANDMASTER SLAYER!';
-            subtext.innerHTML = this.getVictoryAnalysis();
-            content.classList.add('victory');
-            content.classList.remove('defeat');
-        } else {
-            text.textContent = this.getDefeatTitle();
-            subtext.innerHTML = this.getDefeatAnalysis();
-            content.classList.add('defeat');
-            content.classList.remove('victory');
-        }
-
-        overlay.classList.add('active');
+    saveBoardState() {
+        const state = {
+            board: this.board.map(row => row.map(cell => cell ? { ...cell } : null)),
+            playerPieces: this.playerPieces.map(p => ({ ...p })),
+            enemyPieces: this.enemyPieces.map(p => ({ ...p })),
+            frozenPieces: new Map(this.frozenPieces),
+            invulnerablePieces: new Map(this.invulnerablePieces),
+            traps: new Map(this.traps)
+        };
+        this.boardHistory.push(state);
+        if (this.boardHistory.length > 5) this.boardHistory.shift();
     }
 
-    getVictoryAnalysis() {
-        const remainingPieces = this.playerPieces.length;
-        const enemiesKilled = 16 - this.enemyPieces.length;
-        const cardsUsed = this.cardsPlayedThisBattle;
+    restoreBoardState() {
+        if (this.boardHistory.length < 2) return false;
 
-        let analysis = `You defeated the enemy army!<br><br>`;
-        analysis += `<span class="analysis-text">`;
-        analysis += `Pieces remaining: ${remainingPieces}/4<br>`;
-        analysis += `Enemies defeated: ${enemiesKilled}/16<br>`;
-        analysis += `Cards used: ${cardsUsed}/3<br><br>`;
+        this.boardHistory.pop();
+        const state = this.boardHistory.pop();
 
-        if (remainingPieces === 4 && cardsUsed === 0) {
-            analysis += `PERFECT! No casualties, no cards needed!`;
-        } else if (remainingPieces === 4) {
-            analysis += `Flawless Victory! All pieces survived.`;
-        } else if (cardsUsed === 0) {
-            analysis += `Pure Skill! Won without using any cards.`;
-        } else if (enemiesKilled >= 14) {
-            analysis += `Domination! Almost a clean sweep.`;
-        } else {
-            analysis += `Hard-fought victory against overwhelming odds.`;
-        }
-        analysis += `</span>`;
-
-        return analysis;
-    }
-
-    getDefeatTitle() {
-        const remainingEnemies = this.enemyPieces.length;
-
-        if (remainingEnemies >= 14) {
-            return 'BLUNDER!';
-        } else if (remainingEnemies >= 10) {
-            return 'OVERWHELMED';
-        } else if (remainingEnemies >= 6) {
-            return 'DEFEAT';
-        } else {
-            return 'SO CLOSE...';
-        }
-    }
-
-    getDefeatAnalysis() {
-        const remainingEnemies = this.enemyPieces.length;
-        const enemiesKilled = 16 - remainingEnemies;
-        const cardsUsed = this.cardsPlayedThisBattle;
-
-        let analysis = `Your King has fallen...<br><br>`;
-        analysis += `<span class="analysis-text">`;
-        analysis += `Enemies defeated: ${enemiesKilled}/16<br>`;
-        analysis += `Cards used: ${cardsUsed}/3<br><br>`;
-
-        if (remainingEnemies >= 14) {
-            analysis += `Tip: Focus on using your cards strategically!`;
-        } else if (remainingEnemies >= 10) {
-            analysis += `Tip: Try using Diamond Form to block enemy attacks.`;
-        } else if (remainingEnemies >= 6) {
-            analysis += `Tip: Time Warp can undo critical mistakes.`;
-        } else {
-            analysis += `So close! You almost had them. Try again!`;
-        }
-        analysis += `</span>`;
-
-        return analysis;
-    }
-
-    restart() {
-        document.getElementById('game-over-overlay').classList.remove('active');
-
-        // Reset game state
-        this.createBoard();
+        this.board = state.board.map(row => row.map(cell => cell ? { ...cell } : null));
         this.playerPieces = [];
         this.enemyPieces = [];
-        this.selectedPiece = null;
-        this.validMoves = [];
-        this.isPlayerTurn = true;
-        this.gameOver = false;
-        this.selectedCard = null;
-        this.cardState = null;
-        this.cardsPlayedThisBattle = 0;
-        this.frozenPieces.clear();
-        this.traitorPieces.clear();
-        this.invulnerablePieces.clear();
-        this.traps.clear();
-        this.knightJumpActive = false;
-        this.snipeActive = false;
-        this.boardHistory = [];
-        this.skipEnemyTurn = false;
-        this.enemyIntent = null;
-        this.moveCount = 0;
-        this.enemyMoveCount = 0;
-        this.piecesLost = 0;
-        this.piecesCaptures = 0;
 
-        this.setupBattle();
+        for (let row = 0; row < BOARD_ROWS; row++) {
+            for (let col = 0; col < 8; col++) {
+                const piece = this.board[row][col];
+                if (piece) {
+                    (piece.owner === 'player' ? this.playerPieces : this.enemyPieces).push(piece);
+                }
+            }
+        }
+
+        this.frozenPieces = new Map(state.frozenPieces);
+        this.invulnerablePieces = new Map(state.invulnerablePieces);
+        this.traps = new Map(state.traps);
+
         this.saveBoardState();
-        this.render();
+        return true;
     }
 
-    // Return to loadout screen for new loadout selection
-    returnToLoadout() {
-        document.getElementById('game-over-overlay').classList.remove('active');
-        document.getElementById('game-container').style.display = 'none';
-        document.getElementById('loadout-screen').style.display = 'flex';
-        this.gameStarted = false;
+    // ============================================
+    // VISUAL EFFECTS
+    // ============================================
+
+    spawnCaptureParticles(row, col, owner) {
+        const board = document.getElementById('board');
+        if (!board) return;
+
+        const rect = board.getBoundingClientRect();
+        const cellSize = rect.width / 8;
+        const centerX = rect.left + col * cellSize + cellSize / 2;
+        const centerY = rect.top + row * cellSize + cellSize / 2;
+
+        const colors = owner === 'player' ? ['#00d2ff', '#0088cc', '#ffffff'] : ['#ff4444', '#cc0000', '#ffaa00'];
+
+        for (let i = 0; i < 8; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+
+            const angle = (Math.PI * 2 * i) / 8;
+            const dist = 30 + Math.random() * 40;
+
+            particle.style.cssText = `
+                left: ${centerX}px; top: ${centerY}px;
+                width: ${4 + Math.random() * 6}px; height: ${4 + Math.random() * 6}px;
+                background: ${colors[Math.floor(Math.random() * colors.length)]};
+                --tx: ${Math.cos(angle) * dist}px; --ty: ${Math.sin(angle) * dist}px;
+            `;
+
+            document.body.appendChild(particle);
+            setTimeout(() => particle.remove(), 600);
+        }
+    }
+
+    triggerScreenShake() {
+        const container = document.querySelector('.game-container');
+        if (container) {
+            container.classList.add('shake');
+            setTimeout(() => container.classList.remove('shake'), 300);
+        }
     }
 }
 
 // ============================================
-// START GAME
+// START
 // ============================================
 
 const game = new ChessRoguelike();
