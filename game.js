@@ -1184,12 +1184,13 @@ class ChessRoguelike {
     }
 
     deactivateCardEffects() {
-        this.knightJumpActive = false;
-        this.snipeActive = false;
-        this.rallyActive = false;
+        // Only clear effects that weren't already "paid for" via finishCardPlay
+        // Knight's Tour, Snipe, Chain Reaction persist for the turn once played
+        // Dash, GhostWalk, Ricochet can be canceled since they require specific actions
         this.dashPiece = null;
         this.ghostWalkPiece = null;
         this.ricochetPiece = null;
+        // Note: knightJumpActive, snipeActive, chainReactionActive persist until used or turn ends
     }
 
     handleCardAction(row, col) {

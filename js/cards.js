@@ -397,7 +397,7 @@ const CARD_DEFINITIONS = {
         execute: function(game) {
             game.knightJumpActive = true;
             game.showCardInstructions("Knight's Tour active! All pieces can move like Knights.");
-            // This is an instant buff - finishes after player move
+            game.finishCardPlay(false); // Count card but don't end turn
         }
     },
 
@@ -435,6 +435,7 @@ const CARD_DEFINITIONS = {
         execute: function(game, target) {
             game.ricochetPiece = target.id;
             game.showCardInstructions(`${target.type} can ricochet! Capture to trigger second attack.`);
+            game.finishCardPlay(false); // Count card but don't end turn
         }
     },
 
@@ -635,6 +636,7 @@ const CARD_DEFINITIONS = {
         execute: function(game) {
             game.chainReactionActive = true;
             game.showCardInstructions('Chain Reaction active! Your next capture explodes!');
+            game.finishCardPlay(false); // Count card but don't end turn
         }
     },
 
@@ -919,6 +921,7 @@ const CARD_DEFINITIONS = {
         execute: function(game) {
             game.snipeActive = true;
             game.showCardInstructions('Snipe active! Ranged pieces can shoot through obstacles.');
+            game.finishCardPlay(false); // Count card but don't end turn
         }
     },
 
