@@ -376,6 +376,22 @@ body {
     filter: drop-shadow(0 0 2px var(--white));
 }
 
+/* Paparazzi - Enemy Threat Range */
+.cell.enemy-threat-range {
+    background: rgba(255, 51, 51, 0.15) !important;
+}
+
+.cell.enemy-threat-range::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 1px dashed var(--red);
+    pointer-events: none;
+}
+
 /* Intent Arrow */
 .intent-arrow {
     position: absolute;

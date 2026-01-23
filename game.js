@@ -100,6 +100,8 @@ class ChessRoguelike {
         this.dashPiece = null;
         this.ghostWalkPiece = null;
         this.ricochetPiece = null;
+        this.ricochetActive = false;
+        this.ricochetPieceForSecond = null;
         this.extraMoves = null;
         this.kingQueenMoves = 0;
         this.extendedIntentTurns = 0;
@@ -917,6 +919,18 @@ class ChessRoguelike {
                     cell.classList.add('enemy-intent');
                 }
 
+                // Paparazzi - show all enemy attack ranges
+                if (this.showAllEnemyMoves) {
+                    for (const enemy of this.enemyPieces) {
+                        if (this.frozenPieces.has(enemy.id)) continue;
+                        const enemyMoves = this.getValidMoves(enemy, true);
+                        if (enemyMoves.some(m => m.row === row && m.col === col)) {
+                            cell.classList.add('enemy-threat-range');
+                            break;
+                        }
+                    }
+                }
+
                 boardEl.appendChild(cell);
             }
         }
@@ -1013,6 +1027,41 @@ class ChessRoguelike {
         const piece = this.board[row][col];
         const validMove = this.validMoves.find(m => m.row === row && m.col === col);
 
+        // Handle Ricochet second capture
+        if (this.ricochetActive && this.ricochetPieceForSecond) {
+            if (this.selectedPiece === this.ricochetPieceForSecond && validMove) {
+                const target = this.board[row][col];
+                if (target && target.owner === 'enemy') {
+                    this.movePiece(this.selectedPiece, row, col);
+                    this.ricochetActive = false;
+                    this.ricochetPieceForSecond = null;
+                    this.selectedPiece = null;
+                    this.validMoves = [];
+                    this.endPlayerTurn();
+                    return;
+                }
+            }
+            // If ricochet is active but no valid capture, allow ending turn
+            if (piece?.owner === 'player' && piece === this.ricochetPieceForSecond) {
+                this.selectedPiece = piece;
+                // Only show capture moves for ricochet
+                this.validMoves = this.getValidMoves(piece).filter(m => {
+                    const t = this.board[m.row]?.[m.col];
+                    return t && t.owner === 'enemy';
+                });
+                if (this.validMoves.length === 0) {
+                    // No captures available, end ricochet
+                    this.ricochetActive = false;
+                    this.ricochetPieceForSecond = null;
+                    this.showCardInstructions('No captures available for ricochet.');
+                    this.endPlayerTurn();
+                    return;
+                }
+                this.render();
+                return;
+            }
+        }
+
         if (this.selectedPiece && validMove) {
             if (this.cardState?.type === 'instant') {
                 this.cardsPlayedThisBattle++;
@@ -1020,14 +1069,52 @@ class ChessRoguelike {
                 this.cardState = null;
                 this.clearCardInstructions();
             }
+
+            // Clear Dash and Ghost Walk after the move
+            const wasDash = this.dashPiece && this.dashPiece.id === this.selectedPiece.id;
+            const wasGhostWalk = this.ghostWalkPiece === this.selectedPiece.id;
+
             this.movePiece(this.selectedPiece, row, col, validMove.piercing || false);
+
+            if (wasDash) {
+                this.dashPiece = null;
+                this.finishCardPlay(false);
+            }
+            if (wasGhostWalk) {
+                this.ghostWalkPiece = null;
+                this.finishCardPlay(false);
+            }
+
             this.selectedPiece = null;
             this.validMoves = [];
+
+            // Check for Ricochet (movePiece sets ricochetActive)
+            if (this.ricochetActive) {
+                this.render();
+                return; // Don't end turn, wait for second capture
+            }
+
+            // Handle Parallel Play - allow two moves
+            if (this.parallelPlayActive) {
+                this.movesThisTurn++;
+                if (this.movesThisTurn < 2) {
+                    this.showCardInstructions(`Parallel Play: ${2 - this.movesThisTurn} move(s) remaining!`);
+                    this.render();
+                    return; // Don't end turn yet
+                }
+                this.parallelPlayActive = false;
+                this.movesThisTurn = 0;
+            }
+
             this.endPlayerTurn();
             return;
         }
 
         if (piece?.owner === 'player') {
+            // For ricochet, only allow selecting the ricochet piece
+            if (this.ricochetActive && this.ricochetPieceForSecond && piece !== this.ricochetPieceForSecond) {
+                return;
+            }
             this.selectedPiece = piece;
             this.validMoves = this.getValidMoves(piece);
             this.render();
@@ -1216,6 +1303,20 @@ class ChessRoguelike {
                 this.showCardInstructions(`${target.type} kidnapped!`);
                 this.finishCardPlay();
                 break;
+            case 'deployPocket':
+                // Deploy pocketed piece from Pocket Dimension
+                const pocketed = this.pocketedPiece;
+                pocketed.row = row;
+                pocketed.col = col;
+                pocketed.id = `deployed-${Date.now()}`;
+                this.board[row][col] = pocketed;
+                this.playerPieces.push(pocketed);
+                this.pocketedPiece = null;
+                this.showCardInstructions(`${pocketed.type} deployed from pocket dimension!`);
+                this.cardState = null;
+                this.clearCardInstructions();
+                this.render();
+                break;
         }
     }
 
@@ -1278,13 +1379,28 @@ class ChessRoguelike {
 
         const moves = [];
 
-        switch (piece.type) {
-            case PIECES.KING: this.addKingMoves(piece, moves, forAI); break;
-            case PIECES.QUEEN: this.addQueenMoves(piece, moves, forAI); break;
-            case PIECES.ROOK: this.addRookMoves(piece, moves, forAI); break;
-            case PIECES.BISHOP: this.addBishopMoves(piece, moves, forAI); break;
-            case PIECES.KNIGHT: this.addKnightMoves(piece, moves, forAI); break;
-            case PIECES.PAWN: this.addPawnMoves(piece, moves, forAI); break;
+        // Calculate extra range from Dash and Rally
+        let extraRange = 0;
+        if (piece.owner === 'player') {
+            if (this.dashPiece && this.dashPiece.id === piece.id) extraRange += 2;
+            if (this.rallyActive) extraRange += 1;
+        }
+
+        // Check for Ghost Walk
+        const canGhostWalk = piece.owner === 'player' && this.ghostWalkPiece === piece.id;
+
+        // Army of One: King moves like Queen
+        if (piece.type === PIECES.KING && piece.owner === 'player' && this.kingQueenMoves > 0) {
+            this.addQueenMoves(piece, moves, forAI, extraRange, canGhostWalk);
+        } else {
+            switch (piece.type) {
+                case PIECES.KING: this.addKingMoves(piece, moves, forAI); break;
+                case PIECES.QUEEN: this.addQueenMoves(piece, moves, forAI, extraRange, canGhostWalk); break;
+                case PIECES.ROOK: this.addRookMoves(piece, moves, forAI, extraRange, canGhostWalk); break;
+                case PIECES.BISHOP: this.addBishopMoves(piece, moves, forAI, extraRange, canGhostWalk); break;
+                case PIECES.KNIGHT: this.addKnightMoves(piece, moves, forAI); break;
+                case PIECES.PAWN: this.addPawnMoves(piece, moves, forAI); break;
+            }
         }
 
         if (this.knightJumpActive && piece.owner === 'player' && piece.type !== PIECES.KNIGHT) {
@@ -1304,25 +1420,65 @@ class ChessRoguelike {
         }
     }
 
-    addQueenMoves(piece, moves, forAI) {
-        this.addRookMoves(piece, moves, forAI);
-        this.addBishopMoves(piece, moves, forAI);
+    addQueenMoves(piece, moves, forAI, extraRange = 0, canGhostWalk = false) {
+        this.addRookMoves(piece, moves, forAI, extraRange, canGhostWalk);
+        this.addBishopMoves(piece, moves, forAI, extraRange, canGhostWalk);
     }
 
-    addRookMoves(piece, moves, forAI) {
+    addRookMoves(piece, moves, forAI, extraRange = 0, canGhostWalk = false) {
+        const maxRange = 7 + extraRange;
         for (const [dr, dc] of [[-1,0],[1,0],[0,-1],[0,1]]) {
-            for (let i = 1; i < 8; i++) {
-                if (!this.addMoveIfValid(piece, piece.row + dr*i, piece.col + dc*i, moves, forAI)) break;
-                if (this.board[piece.row + dr*i]?.[piece.col + dc*i]) break;
+            for (let i = 1; i <= maxRange; i++) {
+                const row = piece.row + dr * i;
+                const col = piece.col + dc * i;
+                if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= 8) break;
+
+                const target = this.board[row]?.[col];
+                if (!target) {
+                    if (!forAI || !this.traps.has(`${row},${col}`)) {
+                        moves.push({ row, col });
+                    }
+                } else if (target.owner !== piece.owner) {
+                    // Can capture enemy
+                    if (!(forAI && this.invulnerablePieces.has(target.id))) {
+                        if (!this.invulnerablePieces.has(target.id) && !this.isProtected(target)) {
+                            moves.push({ row, col });
+                        }
+                    }
+                    if (!canGhostWalk) break; // Stop unless ghost walking
+                } else {
+                    // Own piece blocks
+                    break;
+                }
             }
         }
     }
 
-    addBishopMoves(piece, moves, forAI) {
+    addBishopMoves(piece, moves, forAI, extraRange = 0, canGhostWalk = false) {
+        const maxRange = 7 + extraRange;
         for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
-            for (let i = 1; i < 8; i++) {
-                if (!this.addMoveIfValid(piece, piece.row + dr*i, piece.col + dc*i, moves, forAI)) break;
-                if (this.board[piece.row + dr*i]?.[piece.col + dc*i]) break;
+            for (let i = 1; i <= maxRange; i++) {
+                const row = piece.row + dr * i;
+                const col = piece.col + dc * i;
+                if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= 8) break;
+
+                const target = this.board[row]?.[col];
+                if (!target) {
+                    if (!forAI || !this.traps.has(`${row},${col}`)) {
+                        moves.push({ row, col });
+                    }
+                } else if (target.owner !== piece.owner) {
+                    // Can capture enemy
+                    if (!(forAI && this.invulnerablePieces.has(target.id))) {
+                        if (!this.invulnerablePieces.has(target.id) && !this.isProtected(target)) {
+                            moves.push({ row, col });
+                        }
+                    }
+                    if (!canGhostWalk) break; // Stop unless ghost walking
+                } else {
+                    // Own piece blocks
+                    break;
+                }
             }
         }
     }
@@ -1331,6 +1487,13 @@ class ChessRoguelike {
         for (const [dr, dc] of [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]]) {
             this.addMoveIfValid(piece, piece.row + dr, piece.col + dc, moves, forAI);
         }
+    }
+
+    // Check if a piece is protected (Shield or Brace)
+    isProtected(piece) {
+        if (this.shieldedPieces.has(piece.id)) return true;
+        if (this.bracedPieces.has(piece.id)) return true;
+        return false;
     }
 
     addPawnMoves(piece, moves, forAI) {
@@ -1402,6 +1565,8 @@ class ChessRoguelike {
         if (target.owner !== piece.owner) {
             if (forAI && this.invulnerablePieces.has(target.id)) return false;
             if (this.invulnerablePieces.has(target.id)) return false;
+            // Check for Shield and Brace protection
+            if (this.isProtected(target)) return false;
             moves.push({ row, col });
             return true;
         }
@@ -1410,17 +1575,56 @@ class ChessRoguelike {
 
     movePiece(piece, toRow, toCol, isPiercing = false) {
         const trapKey = `${toRow},${toCol}`;
+        const fromRow = piece.row;
+        const fromCol = piece.col;
 
         if (this.traps.has(trapKey)) {
             this.traps.delete(trapKey);
             this.board[piece.row][piece.col] = null;
-            this.capturePiece(piece);
+            this.capturePiece(piece, null); // No capturer for trap
             this.checkGameEnd();
             return;
         }
 
         const captured = this.board[toRow][toCol];
-        if (captured) this.capturePiece(captured);
+        let captureOccurred = false;
+
+        if (captured) {
+            // Check for Checkmate Denied
+            if (captured.type === PIECES.KING && captured.owner === 'player' && this.checkmateDeniedActive) {
+                this.checkmateDeniedActive = false;
+                this.showCardInstructions('Checkmate Denied! Your King survives!');
+                // King survives - don't capture, just move attacker nearby
+                // Find adjacent empty square for attacker
+                const adjSquares = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+                for (const [dr, dc] of adjSquares) {
+                    const r = toRow + dr;
+                    const c = toCol + dc;
+                    if (r >= 0 && r < BOARD_ROWS && c >= 0 && c < 8 && !this.board[r][c]) {
+                        this.board[piece.row][piece.col] = null;
+                        piece.row = r;
+                        piece.col = c;
+                        this.board[r][c] = piece;
+                        return;
+                    }
+                }
+                // No adjacent square, attacker stays in place
+                return;
+            }
+
+            captureOccurred = true;
+            this.capturePiece(captured, piece);
+        }
+
+        // Track last player move for "I Didn't See That"
+        if (piece.owner === 'player') {
+            this.lastPlayerMove = {
+                piece,
+                from: { row: fromRow, col: fromCol },
+                to: { row: toRow, col: toCol },
+                wasCapture: captureOccurred
+            };
+        }
 
         this.board[piece.row][piece.col] = null;
         piece.row = toRow;
@@ -1433,12 +1637,31 @@ class ChessRoguelike {
             if (toRow === promoRow) piece.type = PIECES.QUEEN;
         }
 
+        // Handle Ricochet - allow second capture
+        if (captureOccurred && piece.owner === 'player' && this.ricochetPiece === piece.id) {
+            this.ricochetPiece = null;
+            this.ricochetActive = true;
+            this.ricochetPieceForSecond = piece;
+            this.showCardInstructions('Ricochet! Make another capture if possible.');
+        }
+
         this.checkGameEnd();
     }
 
-    capturePiece(piece) {
+    capturePiece(piece, capturer = null) {
         this.spawnCaptureParticles(piece.row, piece.col, piece.owner);
         this.triggerScreenShake();
+
+        // Handle Traitor's Mark - if marked enemy captures, it converts
+        if (capturer && capturer.owner === 'enemy' && this.traitorMarked.has(capturer.id)) {
+            this.traitorMarked.delete(capturer.id);
+            // Convert enemy to player's side
+            this.enemyPieces = this.enemyPieces.filter(p => p !== capturer);
+            capturer.owner = 'player';
+            capturer.id = `traitor-${Date.now()}`;
+            this.playerPieces.push(capturer);
+            this.showCardInstructions(`Traitor! ${capturer.type} joins your side!`);
+        }
 
         if (piece.owner === 'player') {
             this.playerPieces = this.playerPieces.filter(p => p !== piece);
@@ -1496,21 +1719,54 @@ class ChessRoguelike {
             return;
         }
 
+        // Handle Loaded Dice - 50% chance enemy move fails
+        if (this.loadedDiceActive) {
+            this.loadedDiceActive = false;
+            if (Math.random() < 0.5) {
+                this.showCardInstructions('Loaded Dice! Enemy move failed!');
+                this.updateStatusEffects();
+                if (!this.gameOver) this.startPlayerTurn();
+                return;
+            }
+        }
+
         const gameState = this.getGameState();
         const playerCards = this.hand;
 
         let bestMove = null;
 
-        // Check if cached intent is still valid
-        if (this.enemyIntent && typeof EnemyAI !== 'undefined' && EnemyAI.isMoveStillLegal(this.enemyIntent, gameState)) {
-            bestMove = this.enemyIntent;
-        } else if (typeof EnemyAI !== 'undefined') {
-            // Use async Stockfish-powered AI
-            try {
-                bestMove = await EnemyAI.calculateBestMoveAsync(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
-            } catch (err) {
-                console.warn('Async AI failed, using fallback:', err);
-                bestMove = EnemyAI.calculateBestMoveFallback(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+        // Handle Zugzwang - force enemy to move their King
+        if (this.zugzwangActive) {
+            this.zugzwangActive = false;
+            const enemyKing = this.enemyPieces.find(p => p.type === PIECES.KING);
+            if (enemyKing && !this.frozenPieces.has(enemyKing.id)) {
+                const kingMoves = this.getValidMoves(enemyKing, true);
+                if (kingMoves.length > 0) {
+                    // Pick the safest King move
+                    const move = kingMoves[Math.floor(Math.random() * kingMoves.length)];
+                    bestMove = {
+                        piece: enemyKing,
+                        from: { row: enemyKing.row, col: enemyKing.col },
+                        to: move
+                    };
+                    this.showCardInstructions('Zugzwang! Enemy King must move!');
+                }
+            }
+        }
+
+        // If no Zugzwang move, use normal AI
+        if (!bestMove) {
+            // Check if cached intent is still valid
+            if (this.enemyIntent && typeof EnemyAI !== 'undefined' && EnemyAI.isMoveStillLegal(this.enemyIntent, gameState)) {
+                bestMove = this.enemyIntent;
+            } else if (typeof EnemyAI !== 'undefined') {
+                // Use async Stockfish-powered AI
+                try {
+                    bestMove = await EnemyAI.calculateBestMoveAsync(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+                } catch (err) {
+                    console.warn('Async AI failed, using fallback:', err);
+                    bestMove = EnemyAI.calculateBestMoveFallback(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+                }
             }
         }
 
@@ -1527,6 +1783,17 @@ class ChessRoguelike {
     startPlayerTurn() {
         this.isPlayerTurn = true;
         this.saveBoardState();
+
+        // Handle Pocket Dimension - deploy pocketed piece
+        if (this.pocketedPiece) {
+            this.cardState = {
+                type: 'selectEmpty',
+                card: 'deployPocket',
+                piece: this.pocketedPiece
+            };
+            this.showCardInstructions(`Deploy ${this.pocketedPiece.type} from pocket dimension! Click an empty square.`);
+        }
+
         this.render();
 
         // Calculate enemy intent asynchronously (will update UI when done)
