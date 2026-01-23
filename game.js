@@ -1742,7 +1742,6 @@ class ChessRoguelike {
             if (enemyKing && !this.frozenPieces.has(enemyKing.id)) {
                 const kingMoves = this.getValidMoves(enemyKing, true);
                 if (kingMoves.length > 0) {
-                    // Pick the safest King move
                     const move = kingMoves[Math.floor(Math.random() * kingMoves.length)];
                     bestMove = {
                         piece: enemyKing,
@@ -1754,14 +1753,22 @@ class ChessRoguelike {
             }
         }
 
-        // If no Zugzwang move, ALWAYS recalculate based on current board state
-        // This makes AI responsive to player's actual move
-        if (!bestMove && typeof EnemyAI !== 'undefined') {
+        // If no Zugzwang move, use the comprehensive ChessAI system
+        if (!bestMove) {
             try {
-                bestMove = await EnemyAI.calculateBestMoveAsync(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+                // Try new ChessAI system first
+                if (typeof chessAI !== 'undefined') {
+                    bestMove = await chessAI.calculateBestMove(gameState, playerCards, this.aiDifficulty);
+                }
+                // Fallback to EnemyAI
+                if (!bestMove && typeof EnemyAI !== 'undefined') {
+                    bestMove = await EnemyAI.calculateBestMoveAsync(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+                }
             } catch (err) {
-                console.warn('Async AI failed, using fallback:', err);
-                bestMove = EnemyAI.calculateBestMoveFallback(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+                console.warn('AI failed, using fallback:', err);
+                if (typeof EnemyAI !== 'undefined') {
+                    bestMove = EnemyAI.calculateBestMoveFallback(gameState, playerCards, this.aiDifficulty, this.aiArchetype);
+                }
             }
         }
 
