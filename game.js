@@ -1435,16 +1435,10 @@ class ChessRoguelike {
 
                 const target = this.board[row]?.[col];
                 if (!target) {
-                    if (!forAI || !this.traps.has(`${row},${col}`)) {
-                        moves.push({ row, col });
-                    }
+                    moves.push({ row, col });
                 } else if (target.owner !== piece.owner) {
                     // Can capture enemy
-                    if (!(forAI && this.invulnerablePieces.has(target.id))) {
-                        if (!this.invulnerablePieces.has(target.id) && !this.isProtected(target)) {
-                            moves.push({ row, col });
-                        }
-                    }
+                    moves.push({ row, col });
                     if (!canGhostWalk) break; // Stop unless ghost walking
                 } else {
                     // Own piece blocks
@@ -1464,16 +1458,10 @@ class ChessRoguelike {
 
                 const target = this.board[row]?.[col];
                 if (!target) {
-                    if (!forAI || !this.traps.has(`${row},${col}`)) {
-                        moves.push({ row, col });
-                    }
+                    moves.push({ row, col });
                 } else if (target.owner !== piece.owner) {
                     // Can capture enemy
-                    if (!(forAI && this.invulnerablePieces.has(target.id))) {
-                        if (!this.invulnerablePieces.has(target.id) && !this.isProtected(target)) {
-                            moves.push({ row, col });
-                        }
-                    }
+                    moves.push({ row, col });
                     if (!canGhostWalk) break; // Stop unless ghost walking
                 } else {
                     // Own piece blocks
@@ -1502,14 +1490,10 @@ class ChessRoguelike {
         const newRow = piece.row + dir;
 
         if (newRow >= 0 && newRow < BOARD_ROWS && !this.board[newRow][piece.col]) {
-            if (!forAI || !this.traps.has(`${newRow},${piece.col}`)) {
-                moves.push({ row: newRow, col: piece.col });
-            }
+            moves.push({ row: newRow, col: piece.col });
             const doubleRow = piece.row + dir * 2;
             if (piece.row === startRow && !this.board[doubleRow]?.[piece.col]) {
-                if (!forAI || !this.traps.has(`${doubleRow},${piece.col}`)) {
-                    moves.push({ row: doubleRow, col: piece.col });
-                }
+                moves.push({ row: doubleRow, col: piece.col });
             }
         }
 
@@ -1518,8 +1502,6 @@ class ChessRoguelike {
             if (captureCol >= 0 && captureCol < 8) {
                 const target = this.board[newRow]?.[captureCol];
                 if (target && target.owner !== piece.owner) {
-                    if (forAI && this.invulnerablePieces.has(target.id)) continue;
-                    if (forAI && this.traps.has(`${newRow},${captureCol}`)) continue;
                     moves.push({ row: newRow, col: captureCol });
                 }
             }
@@ -1542,7 +1524,7 @@ class ChessRoguelike {
                 if (target) {
                     obstacles++;
                     if (obstacles === 2 && target.owner !== piece.owner && target.type !== 'king') {
-                        if (!this.invulnerablePieces.has(target.id) && !moves.some(m => m.row === row && m.col === col)) {
+                        if (!moves.some(m => m.row === row && m.col === col)) {
                             moves.push({ row, col, piercing: true });
                         }
                         break;
@@ -1555,7 +1537,6 @@ class ChessRoguelike {
 
     addMoveIfValid(piece, row, col, moves, forAI) {
         if (row < 0 || row >= BOARD_ROWS || col < 0 || col >= 8) return false;
-        if (forAI && this.traps.has(`${row},${col}`)) return false;
 
         const target = this.board[row][col];
         if (!target) {
@@ -1563,10 +1544,6 @@ class ChessRoguelike {
             return true;
         }
         if (target.owner !== piece.owner) {
-            if (forAI && this.invulnerablePieces.has(target.id)) return false;
-            if (this.invulnerablePieces.has(target.id)) return false;
-            // Check for Shield and Brace protection
-            if (this.isProtected(target)) return false;
             moves.push({ row, col });
             return true;
         }
@@ -1574,6 +1551,13 @@ class ChessRoguelike {
     }
 
     movePiece(piece, toRow, toCol, isPiercing = false) {
+        // Enforce Freeze: If frozen, cannot move
+        if (this.frozenPieces.has(piece.id)) {
+            this.showCardInstructions(`${piece.type} is frozen and cannot move!`);
+            // Decrement freeze duration if it's the piece trying to move (optional, already handled in updateStatusEffects)
+            return;
+        }
+
         const trapKey = `${toRow},${toCol}`;
         const fromRow = piece.row;
         const fromCol = piece.col;
@@ -1590,6 +1574,15 @@ class ChessRoguelike {
         let captureOccurred = false;
 
         if (captured) {
+            // Check Protections: Invulnerable, Shielded, Braced
+            // If the pieces are protected, the attack fails and the turn is lost
+            if (this.invulnerablePieces.has(captured.id) ||
+                this.shieldedPieces.has(captured.id) ||
+                this.bracedPieces.has(captured.id)) {
+                this.showCardInstructions(`Attack failed! ${captured.type} is protected.`);
+                return;
+            }
+
             // Check for Checkmate Denied
             if (captured.type === PIECES.KING && captured.owner === 'player' && this.checkmateDeniedActive) {
                 this.checkmateDeniedActive = false;
