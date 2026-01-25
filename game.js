@@ -114,6 +114,10 @@ class ChessRoguelike {
         this.capturedEnemyPieces = [];
         this.boardHistory = [];
 
+        // Debug move log
+        this.moveLog = [];
+        this.turnNumber = 0;
+
         // AI
         this.enemyIntent = null;
         this.skipEnemyTurn = false;
@@ -139,6 +143,88 @@ class ChessRoguelike {
         this.bindLoadoutEvents();
         this.updateLoadoutDisplay();
         this.renderStarterDeckPreview();
+
+        // Expose debug log to console
+        window.getGameLog = () => this.printMoveLog();
+        window.copyGameLog = () => this.copyMoveLog();
+        console.log('%c[Debug] Game log available: getGameLog() or copyGameLog()', 'color: #888');
+    }
+
+    // ============================================
+    // DEBUG LOGGING
+    // ============================================
+
+    logMove(piece, fromRow, fromCol, toRow, toCol, captured, extra = {}) {
+        const entry = {
+            turn: this.turnNumber,
+            owner: piece.owner,
+            piece: piece.type,
+            pieceId: piece.id,
+            from: this.toChessNotation(fromRow, fromCol),
+            to: this.toChessNotation(toRow, toCol),
+            captured: captured ? { type: captured.type, owner: captured.owner } : null,
+            timestamp: Date.now(),
+            playerPieces: this.playerPieces.length,
+            enemyPieces: this.enemyPieces.length,
+            ...extra
+        };
+        this.moveLog.push(entry);
+        console.log(`%c[Turn ${entry.turn}] ${entry.owner.toUpperCase()} ${entry.piece} ${entry.from}→${entry.to}${captured ? ' captures ' + captured.type : ''}`,
+            entry.owner === 'player' ? 'color: #4CAF50' : 'color: #f44336');
+    }
+
+    logEvent(eventType, details = {}) {
+        const entry = {
+            turn: this.turnNumber,
+            event: eventType,
+            timestamp: Date.now(),
+            playerPieces: this.playerPieces.length,
+            enemyPieces: this.enemyPieces.length,
+            ...details
+        };
+        this.moveLog.push(entry);
+        console.log(`%c[Turn ${entry.turn}] EVENT: ${eventType}`, 'color: #FF9800', details);
+    }
+
+    toChessNotation(row, col) {
+        const files = 'abcdefgh';
+        const rank = 8 - row;
+        return files[col] + rank;
+    }
+
+    printMoveLog() {
+        console.log('%c=== GAME MOVE LOG ===', 'font-size: 14px; font-weight: bold; color: #2196F3');
+        console.log(`Battle: ${this.currentBattle}, Difficulty: ${this.aiDifficulty}`);
+        console.log(`Player pieces: ${this.playerPieces.map(p => p.type).join(', ')}`);
+        console.log(`Enemy pieces: ${this.enemyPieces.map(p => p.type).join(', ')}`);
+        console.log('---');
+        this.moveLog.forEach((entry, i) => {
+            if (entry.event) {
+                console.log(`${i + 1}. [T${entry.turn}] EVENT: ${entry.event}`, entry);
+            } else {
+                console.log(`${i + 1}. [T${entry.turn}] ${entry.owner} ${entry.piece} ${entry.from}→${entry.to}${entry.captured ? ' x' + entry.captured.type : ''}`);
+            }
+        });
+        console.log('%c=== END LOG ===', 'font-size: 14px; font-weight: bold; color: #2196F3');
+        return this.moveLog;
+    }
+
+    copyMoveLog() {
+        const logText = JSON.stringify({
+            battle: this.currentBattle,
+            difficulty: this.aiDifficulty,
+            archetype: this.aiArchetype,
+            playerPieces: this.playerPieces.map(p => ({ type: p.type, row: p.row, col: p.col })),
+            enemyPieces: this.enemyPieces.map(p => ({ type: p.type, row: p.row, col: p.col })),
+            log: this.moveLog
+        }, null, 2);
+        navigator.clipboard.writeText(logText).then(() => {
+            console.log('%c[Debug] Move log copied to clipboard!', 'color: #4CAF50');
+        }).catch(() => {
+            console.log(logText);
+            console.log('%c[Debug] Could not copy, log printed above', 'color: #FF9800');
+        });
+        return logText;
     }
 
     bindLoadoutEvents() {
@@ -632,6 +718,13 @@ class ChessRoguelike {
         this.boardHistory = [];
         this.skipEnemyTurn = false;
         this.enemyIntent = null;
+
+        // Reset move log for new battle
+        this.moveLog = [];
+        this.turnNumber = 0;
+        console.log(`%c=== BATTLE ${this.currentBattle} STARTED ===`, 'font-size: 12px; font-weight: bold; color: #2196F3');
+        console.log(`Difficulty: ${this.aiDifficulty}, Archetype: ${this.aiArchetype}`);
+        console.log(`Formation: ${this.currentFormation?.name || 'Unknown'}`);
     }
 
     bindBattleEvents() {
@@ -677,6 +770,15 @@ class ChessRoguelike {
         this.runStats.battlesWon++;
         this.runStats.totalEnemiesKilled += this.capturedEnemyPieces.length;
         this.runStats.totalCardsPlayed += this.cardsPlayedThisBattle;
+
+        // Log victory
+        this.logEvent('BATTLE_VICTORY', {
+            turns: this.turnNumber,
+            playerPiecesRemaining: this.playerPieces.length,
+            enemiesCaptured: this.capturedEnemyPieces.length
+        });
+        console.log(`%c=== BATTLE ${this.currentBattle} WON in ${this.turnNumber} turns ===`, 'font-size: 12px; font-weight: bold; color: #4CAF50');
+        console.log('%cUse copyGameLog() to copy the full log', 'color: #888');
 
         if (this.currentBattle >= this.totalBattles) {
             // Run complete!
@@ -783,6 +885,15 @@ class ChessRoguelike {
 
     onBattleDefeat() {
         this.gameOver = true;
+
+        // Log defeat
+        this.logEvent('BATTLE_DEFEAT', {
+            turns: this.turnNumber,
+            playerPiecesRemaining: this.playerPieces.length,
+            enemiesRemaining: this.enemyPieces.length
+        });
+        console.log(`%c=== BATTLE ${this.currentBattle} LOST on turn ${this.turnNumber} ===`, 'font-size: 12px; font-weight: bold; color: #f44336');
+        console.log('%cUse copyGameLog() to copy the full log', 'color: #888');
 
         const overlay = document.getElementById('game-over-overlay');
         const text = document.getElementById('game-over-text');
@@ -1377,6 +1488,9 @@ class ChessRoguelike {
         const cardId = this.selectedCard;
         const card = CARD_DEFINITIONS[cardId];
 
+        // Log card play
+        this.logEvent('CARD_PLAYED', { card: cardId, name: card?.name, isBurn: card?.isBurn });
+
         this.cardsPlayedThisBattle++;
         this.runStats.totalCardsPlayed++;
 
@@ -1765,6 +1879,9 @@ class ChessRoguelike {
             this.showCardInstructions('Ricochet! Make another capture if possible.');
         }
 
+        // Log the move
+        this.logMove(piece, fromRow, fromCol, toRow, toCol, captured, { isPiercing });
+
         this.checkGameEnd();
     }
 
@@ -1895,7 +2012,7 @@ class ChessRoguelike {
         // Check if AI's best move has a very low score (indicates checkmate)
         // Score of -99900 means mate in 1, -99800 means mate in 2, etc.
         if (bestMove && bestMove.score !== undefined && bestMove.score <= -99000) {
-            console.log('AI detected checkmate - score:', bestMove.score);
+            this.logEvent('CHECKMATE_BY_SCORE', { score: bestMove.score, bestMove: bestMove.uci });
             this.onBattleVictory();
             return;
         }
@@ -1912,6 +2029,7 @@ class ChessRoguelike {
 
     startPlayerTurn() {
         this.isPlayerTurn = true;
+        this.turnNumber++;
         this.saveBoardState();
 
         // Handle Pocket Dimension - deploy pocketed piece
@@ -2020,18 +2138,21 @@ class ChessRoguelike {
     checkGameEnd() {
         const playerKing = this.playerPieces.find(p => p.type === PIECES.KING);
         if (!playerKing) {
+            this.logEvent('KING_CAPTURED', { owner: 'player' });
             this.onBattleDefeat();
             return;
         }
 
         const enemyKing = this.enemyPieces.find(p => p.type === PIECES.KING);
         if (!enemyKing || this.enemyPieces.length === 0) {
+            this.logEvent('ENEMY_KING_CAPTURED');
             this.onBattleVictory();
             return;
         }
 
         // Check for checkmate (enemy king in check with no escape)
         if (this.isCheckmate('enemy')) {
+            this.logEvent('CHECKMATE_DETECTED');
             this.onBattleVictory();
             return;
         }
@@ -2297,4 +2418,26 @@ class ChessRoguelike {
 // START
 // ============================================
 
-const game = new ChessRoguelike();
+let game;
+
+function initGame() {
+    try {
+        console.log('[Init] Starting game initialization...');
+        game = new ChessRoguelike();
+        console.log('[Init] Game initialized successfully');
+    } catch (err) {
+        console.error('[Init] Failed to initialize game:', err);
+        document.body.innerHTML = `<div style="color: red; padding: 20px; font-family: monospace;">
+            <h2>Game failed to load</h2>
+            <p>${err.message}</p>
+            <pre>${err.stack}</pre>
+        </div>`;
+    }
+}
+
+// Wait for DOM to be ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initGame);
+} else {
+    initGame();
+}
