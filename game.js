@@ -1892,6 +1892,14 @@ class ChessRoguelike {
             }
         }
 
+        // Check if AI's best move has a very low score (indicates checkmate)
+        // Score of -99900 means mate in 1, -99800 means mate in 2, etc.
+        if (bestMove && bestMove.score !== undefined && bestMove.score <= -99000) {
+            console.log('AI detected checkmate - score:', bestMove.score);
+            this.onBattleVictory();
+            return;
+        }
+
         if (bestMove) {
             this.enemyIntent = bestMove;
             this.movePiece(bestMove.piece, bestMove.to.row, bestMove.to.col);
